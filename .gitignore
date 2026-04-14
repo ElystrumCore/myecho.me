@@ -24,6 +24,9 @@ env/
 # Data uploads (keep sample/)
 data/uploads/
 
+# Reference repos (cloned for schema study)
+data/reference/
+
 # Database
 *.db
 *.sqlite3

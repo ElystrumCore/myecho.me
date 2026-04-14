@@ -223,19 +223,56 @@ Public-facing journal page at `/echo/{username}`. This is the product.
 - processed_at: datetime
 ```
 
-### JournalEntry
+### JournalEntry (metadata — lean, for listing queries)
+Follows LJ pattern: separate content from metadata. LJ split `log2` (metadata) from `logtext2` (body). We do the same.
 ```
 - id: uuid
 - user_id: uuid (FK)
 - title: string
-- content: text (markdown)
-- topic_tags: string[]
 - status: enum (draft, pending_review, published, archived)
+- security: enum (public, private, selected)     # LJ pattern: per-entry visibility, not global
 - generated_by: enum (echo, user, hybrid)
 - generation_prompt: text (what triggered this post)
+- pub_year: int                                   # LJ pattern: date denormalization for archive/timeline queries
+- pub_month: int
+- pub_day: int
 - published_at: datetime
 - created_at: datetime
+- updated_at: datetime
 ```
+
+### JournalContent (heavy content — loaded on demand)
+```
+- entry_id: uuid (FK → JournalEntry)
+- body: text (markdown)
+- body_html: text (pre-rendered, optional)
+```
+
+### EntryProp (extensible metadata — LJ props pattern)
+Instead of adding columns for every new attribute, use a key-value store with a registered catalog.
+LJ used `logprop2` + `logproplist` for moods, music, location, tags, etc. without schema migrations.
+Our JSONB fields serve a similar purpose, but formalizing the catalog prevents drift.
+```
+- entry_id: uuid (FK → JournalEntry)
+- prop_key: string                                # registered key from PropCatalog
+- prop_value: text
+```
+
+### PropCatalog (registry of known property types)
+```
+- key: string (PK)                                # e.g. "topic_tags", "echo_mood", "confidence", "belief_refs"
+- data_type: enum (string, string_array, float, int, boolean, json)
+- description: string
+- created_at: datetime
+```
+
+Default props to register at init:
+- `topic_tags` (string_array) — topics this entry relates to
+- `echo_mood` (string) — inferred emotional state when generating (for drift tracking, inspired by LJ mood system)
+- `echo_confidence` (float) — how confident Echo was in this generation
+- `belief_refs` (string_array) — which BeliefGraph nodes were drawn on
+- `generation_model` (string) — which LLM was used
+- `revision_count` (int) — how many times owner edited before publishing
 
 ### AskInteraction
 ```
@@ -244,6 +281,8 @@ Public-facing journal page at `/echo/{username}`. This is the product.
 - visitor_id: string (anonymous hash or session)
 - question: text
 - response: text
+- node_type: string (default "ask")               # LJ pattern: generic nodetype for threading
+- parent_id: uuid (nullable, FK → self)            # for follow-up questions / threading
 - belief_refs: string[] (which BeliefGraph nodes were used)
 - confidence: float
 - created_at: datetime
@@ -257,6 +296,7 @@ Public-facing journal page at `/echo/{username}`. This is the product.
 - original_position: text
 - current_position: text
 - drift_score: float
+- echo_mood_at_drift: string (nullable)            # what was Echo's inferred state when drift occurred
 - acknowledged: boolean
 - created_at: datetime
 ```
@@ -366,9 +406,41 @@ echo/
 │   ├── test_profile.py
 │   └── test_engine.py
 ├── data/
-│   └── sample/             # Sample LinkedIn CSVs for testing
+│   ├── sample/             # Sample LinkedIn CSVs for testing
+│   └── reference/
+│       └── livejournal/    # Cloned LJ repo (gitignored) — schema reference only
 └── alembic/                # DB migrations
 ```
+
+---
+
+## LiveJournal Schema Reference
+
+The original LJ codebase is cloned at `data/reference/livejournal/` (gitignored). The main schema file is `bin/upgrading/update-db-general.pl`. Six patterns were extracted and adopted:
+
+1. **Separate content from metadata.** LJ splits `log2` (metadata, security, dates, reply counts) from `logtext2` (subject + body text). Echo does the same — JournalEntry is lean for listing queries, JournalContent holds the body and loads on demand.
+
+2. **The props system.** Instead of adding columns for every new entry attribute, LJ uses a `propid → value` key-value store (`logprop2` + `logproplist`). This let them add moods, music, location, tags, comment screening, and revision tracking without schema migrations. Echo formalizes this with EntryProp + PropCatalog.
+
+3. **Security via per-entry control.** LJ uses `security` enum (public/private/usemask) + a 32-bit allowmask for friend groups. Echo adopts the three-tier model (public / owner-only / selected) without the friend group bitmask in Phase 0.
+
+4. **Comment threading with generic nodetype.** LJ's `talk2` uses `parenttalkid` for nesting and `nodetype` to make comments attachable to different content types. When Echo adds comment support on Ask responses or journal entries, this is the pattern. AskInteraction already has `node_type` and `parent_id` for this.
+
+5. **Date denormalization.** LJ stores year/month/day as separate columns alongside the datetime for fast archive queries ("show me all posts from March 2024"). JournalEntry includes `pub_year`, `pub_month`, `pub_day` for the timeline view.
+
+6. **Mood as structured metadata.** LJ's hierarchical moods with parent-child relationships. Echo's BeliefGraph topics serve a similar purpose, but the idea of an `echo_mood` signal per journal entry — what was the Echo's inferred state when generating — is adopted for drift tracking via the props system.
+
+**What LJ got right that Echo preserves:**
+- Journal entries are the atomic unit, not posts in a feed
+- Security is per-entry, not global
+- Metadata is extensible without schema changes
+- The owner controls visibility, not an algorithm
+
+**What Echo does differently:**
+- No friends list / social graph — the journal is the product, not the network
+- AI-generated content with approval workflow (LJ was human-authored only)
+- BeliefGraph / StyleFingerprint replace mood/music metadata with something deeper
+- Drift detection has no LJ equivalent — this is new territory
 
 ---
 

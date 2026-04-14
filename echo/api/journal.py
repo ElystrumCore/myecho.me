@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from echo.database import get_db
 from echo.models.user import User
-from echo.models.journal import JournalEntry, EntryStatus
+from echo.models.journal import JournalEntry, JournalContent, EntryStatus, EntrySecurity
 from echo.models.profile import EchoProfile
 
 router = APIRouter()
@@ -23,13 +23,14 @@ def _get_user_by_username(username: str, db: Session) -> User:
 
 @router.get("/{username}")
 async def get_journal(username: str, db: Session = Depends(get_db)):
-    """Published journal entries for a user."""
+    """Published journal entries for a user — metadata only for listing."""
     user = _get_user_by_username(username, db)
     entries = (
         db.query(JournalEntry)
         .filter(
             JournalEntry.user_id == user.id,
             JournalEntry.status == EntryStatus.published,
+            JournalEntry.security == EntrySecurity.public,
         )
         .order_by(JournalEntry.published_at.desc())
         .all()
@@ -41,9 +42,9 @@ async def get_journal(username: str, db: Session = Depends(get_db)):
             {
                 "id": e.id,
                 "title": e.title,
-                "content": e.content,
-                "topic_tags": e.topic_tags,
                 "published_at": e.published_at,
+                "pub_year": e.pub_year,
+                "pub_month": e.pub_month,
             }
             for e in entries
         ],
@@ -52,14 +53,16 @@ async def get_journal(username: str, db: Session = Depends(get_db)):
 
 @router.get("/{username}/entry/{entry_id}")
 async def get_entry(username: str, entry_id: str, db: Session = Depends(get_db)):
-    """Single published journal entry."""
+    """Single published journal entry — loads content on demand (LJ logtext2 pattern)."""
     user = _get_user_by_username(username, db)
     entry = (
         db.query(JournalEntry)
+        .options(joinedload(JournalEntry.content))
         .filter(
             JournalEntry.id == entry_id,
             JournalEntry.user_id == user.id,
             JournalEntry.status == EntryStatus.published,
+            JournalEntry.security == EntrySecurity.public,
         )
         .first()
     )
@@ -68,8 +71,8 @@ async def get_entry(username: str, entry_id: str, db: Session = Depends(get_db))
     return {
         "id": entry.id,
         "title": entry.title,
-        "content": entry.content,
-        "topic_tags": entry.topic_tags,
+        "body": entry.content.body if entry.content else "",
+        "body_html": entry.content.body_html if entry.content else None,
         "published_at": entry.published_at,
         "generated_by": entry.generated_by,
     }

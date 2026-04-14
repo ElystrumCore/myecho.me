@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -6,7 +7,12 @@ from sqlalchemy.orm import Session
 
 from echo.database import get_db
 from echo.models.profile import EchoProfile
-from echo.models.journal import JournalEntry, EntryStatus
+from echo.models.journal import (
+    JournalEntry,
+    JournalContent,
+    EntryProp,
+    EntryStatus,
+)
 
 router = APIRouter()
 
@@ -34,12 +40,24 @@ async def generate_post(
     entry = JournalEntry(
         user_id=user_id,
         title=f"On {request.topic or 'things on my mind'}",
-        content="[generation pending — engine not yet wired]",
-        topic_tags=[request.topic] if request.topic else [],
         status=EntryStatus.pending_review,
         generation_prompt=request.topic,
     )
     db.add(entry)
+    db.flush()
+
+    # Separate content table (LJ logtext2 pattern)
+    content = JournalContent(
+        entry_id=entry.id,
+        body="[generation pending — engine not yet wired]",
+    )
+    db.add(content)
+
+    # Topic tags via props system (LJ logprop2 pattern)
+    if request.topic:
+        prop = EntryProp(entry_id=entry.id, prop_key="topic_tags", prop_value=request.topic)
+        db.add(prop)
+
     db.commit()
     db.refresh(entry)
     return {"entry_id": entry.id, "status": entry.status, "title": entry.title}
@@ -66,7 +84,7 @@ async def ask_echo(
 
 @router.get("/{user_id}/drafts")
 async def list_drafts(user_id: uuid.UUID, db: Session = Depends(get_db)):
-    """List pending drafts for review."""
+    """List pending drafts for review — metadata only, no body content."""
     drafts = (
         db.query(JournalEntry)
         .filter(
@@ -94,7 +112,7 @@ async def update_draft(
     action: str,
     db: Session = Depends(get_db),
 ):
-    """Approve, edit, or reject a draft. action: publish | archive | edit"""
+    """Approve, edit, or reject a draft. action: publish | archive"""
     entry = (
         db.query(JournalEntry)
         .filter(JournalEntry.id == entry_id, JournalEntry.user_id == user_id)
@@ -105,6 +123,11 @@ async def update_draft(
 
     if action == "publish":
         entry.status = EntryStatus.published
+        now = datetime.utcnow()
+        entry.published_at = now
+        entry.pub_year = now.year
+        entry.pub_month = now.month
+        entry.pub_day = now.day
     elif action == "archive":
         entry.status = EntryStatus.archived
     else:
