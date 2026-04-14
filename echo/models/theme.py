@@ -3,12 +3,16 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echo.database import Base
+
+if TYPE_CHECKING:
+    from echo.models.user import User
 
 
 class ThemeGeneratedBy(str, enum.Enum):

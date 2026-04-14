@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echo.database import Base
+
+if TYPE_CHECKING:
+    from echo.models.ingest import IngestSource
+    from echo.models.journal import AskInteraction, DriftEvent, JournalEntry
+    from echo.models.profile import EchoProfile
+    from echo.models.theme import ThemeConfig
 
 
 class User(Base):

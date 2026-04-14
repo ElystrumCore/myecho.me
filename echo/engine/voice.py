@@ -1,7 +1,5 @@
 """Voice generation — LLM wrapper that speaks in the user's voice."""
 
-import anthropic
-
 from echo.config import settings
 
 
@@ -20,6 +18,14 @@ def generate_text(
     Returns:
         Generated text in the user's voice.
     """
+    try:
+        import anthropic
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "The anthropic SDK is required to generate text. Install project dependencies "
+            "before using the voice engine."
+        ) from exc
+
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     message = client.messages.create(
