@@ -23,3 +23,4 @@ class User(Base):
     journal_entries: Mapped[list["JournalEntry"]] = relationship(back_populates="user")
     ask_interactions: Mapped[list["AskInteraction"]] = relationship(back_populates="user")
     drift_events: Mapped[list["DriftEvent"]] = relationship(back_populates="user")
+    theme: Mapped["ThemeConfig"] = relationship(back_populates="user", uselist=False)

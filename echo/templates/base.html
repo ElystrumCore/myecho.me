@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Echo{% endblock %} — myecho.me</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    {% if theme_css_vars %}
+    <style>{{ theme_css_vars | safe }}</style>
+    {% endif %}
+    {% if theme_css_overrides %}
+    <style>{{ theme_css_overrides | safe }}</style>
+    {% endif %}
+    {% if theme_fonts %}
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family={{ theme_fonts | urlencode }}&display=swap">
+    {% endif %}
     {% block head %}{% endblock %}
 </head>
 <body>
