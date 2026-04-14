@@ -25,6 +25,12 @@ class AskRequest(BaseModel):
     question: str
 
 
+class AssistRequest(BaseModel):
+    text: str
+    action: str = "rewrite"
+    instruction: str | None = None
+
+
 @router.post("/{user_id}/generate")
 async def generate_post(
     user_id: uuid.UUID,
@@ -80,6 +86,36 @@ async def ask_echo(
         "response": "[response pending — engine not yet wired]",
         "confidence": 0.0,
     }
+
+
+@router.post("/{user_id}/assist")
+async def assist_inline(
+    user_id: uuid.UUID,
+    request: AssistRequest,
+    db: Session = Depends(get_db),
+):
+    """Inline editor AI assist — rewrites selected text in the user's voice.
+
+    Used by the BlockNote editor's AI actions. Every action runs through the
+    user's voice prompt so output matches their StyleFingerprint.
+
+    Actions: rewrite, continue, more_direct, more_casual, more_formal,
+    add_evidence, position, custom (requires instruction field).
+    """
+    profile = db.query(EchoProfile).filter(EchoProfile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found — run ingest first")
+    if not profile.voice_prompt:
+        raise HTTPException(status_code=400, detail="Voice prompt not compiled — rebuild profile")
+
+    from echo.engine.assist import assist
+    result = assist(
+        voice_prompt=profile.voice_prompt,
+        text=request.text,
+        action=request.action,
+        instruction=request.instruction,
+    )
+    return result
 
 
 @router.get("/{user_id}/drafts")

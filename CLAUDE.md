@@ -325,6 +325,7 @@ Default props to register at init:
 ### Echo Engine
 - `POST /api/echo/{user_id}/generate` — generate a journal post (topic optional)
 - `POST /api/echo/{user_id}/ask` — ask the Echo a question, get response
+- `POST /api/echo/{user_id}/assist` — inline editor AI assist (selected text + instruction → rewritten in voice)
 - `GET /api/echo/{user_id}/drafts` — list pending drafts
 - `PUT /api/echo/{user_id}/drafts/{entry_id}` — approve/edit/reject draft
 
@@ -348,8 +349,37 @@ Default props to register at init:
 - **Database**: PostgreSQL with jsonb for profile data
 - **Storage**: Cyclone VRAG for journal entries and profile artifacts (if available), else local file storage
 - **LLM**: Claude API for voice generation (configurable, support OpenAI/local model fallback)
-- **Frontend**: Start simple — server-rendered templates (Jinja2) or lightweight React. The journal page must be fast and readable above all else.
+- **Frontend (public)**: Server-rendered Jinja2 templates — fast, readable, SEO-friendly. The journal page is the product; it must load instantly.
+- **Frontend (owner)**: React app with BlockNote editor. Vite build, served by FastAPI at `/dashboard/*`. The editing experience is where the AI collaboration happens.
+- **Editor**: [BlockNote](https://github.com/TypeCellOS/BlockNote) — block-based rich text editor built on ProseMirror/Tiptap. AI integration via `@blocknote/xl-ai` wired to Echo's voice engine. The editor doesn't know it's writing as the user — it calls Echo's `/assist` endpoint, and Echo handles the voice.
 - **Auth**: Simple session-based for MVP. Owner login only. Visitors don't need accounts.
+
+### Editor Architecture (BlockNote + Echo)
+
+The owner dashboard uses BlockNote as a collaborative writing environment where Echo is an inline AI assistant:
+
+**How AI actions flow:**
+1. Owner writes/edits a post in BlockNote
+2. Owner selects text → clicks AI button (or types `/ai rewrite this more casually`)
+3. BlockNote calls `POST /api/echo/{user_id}/assist` with the selected text + instruction
+4. Echo's assist endpoint loads the user's voice prompt (StyleFingerprint + BeliefGraph + KnowledgeMap)
+5. Claude rewrites the text in the user's voice, following the instruction
+6. BlockNote replaces the selection with the result
+
+**AI actions available in the editor:**
+- **Rewrite in my voice** — takes any text and rewrites it matching the StyleFingerprint
+- **Continue this thought** — extends from cursor position using BeliefGraph context
+- **Make more direct / casual / formal** — tone adjustments within the user's natural range
+- **Add evidence** — pulls supporting details from KnowledgeMap expertise
+- **What would I say about...** — generates a paragraph on a topic from BeliefGraph positions
+
+**Why BlockNote specifically:**
+- Block-based editing maps to journal entries as composed content, not raw text
+- AI inline in the document, not in a sidebar — the LLM is a collaborator
+- RAG integration built in — plugs into Echo's retrieval pipeline
+- ProseMirror foundation (Google Docs-grade)
+- Themeable UI matches the owner's generated journal theme
+- Core is MPL-2.0, AI integration is GPL-3.0 (fine for Echo's open source model)
 
 ---
 
@@ -369,6 +399,7 @@ echo/
 │   │   ├── user.py
 │   │   ├── profile.py
 │   │   ├── journal.py
+│   │   ├── theme.py
 │   │   └── ingest.py
 │   ├── ingest/
 │   │   ├── __init__.py
@@ -387,20 +418,35 @@ echo/
 │   │   ├── voice.py        # LLM voice generation
 │   │   ├── journal.py      # Journal post generation
 │   │   ├── ask.py          # Ask response generation
+│   │   ├── assist.py       # Inline editor AI assist
+│   │   ├── themes.py       # Theme generation engine
 │   │   └── drift.py        # Drift detection
 │   ├── api/
 │   │   ├── __init__.py
 │   │   ├── ingest.py       # Ingest endpoints
 │   │   ├── profile.py      # Profile endpoints
 │   │   ├── echo.py         # Generation endpoints
+│   │   ├── theme.py        # Theme endpoints
 │   │   ├── journal.py      # Public journal endpoints
 │   │   └── dashboard.py    # Owner dashboard endpoints
-│   └── templates/          # Jinja2 or static frontend
+│   └── templates/          # Jinja2 for public pages
+│       ├── base.html
 │       ├── journal.html
 │       ├── entry.html
 │       ├── ask.html
 │       ├── timeline.html
 │       └── dashboard.html
+├── frontend/               # React app for owner dashboard
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   ├── index.html
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx
+│       ├── api.ts           # Echo API client
+│       └── components/
+│           └── EchoEditor.tsx  # BlockNote editor wired to Echo voice engine
 ├── tests/
 │   ├── test_ingest.py
 │   ├── test_profile.py
