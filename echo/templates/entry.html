@@ -27,8 +27,172 @@
         </div>
     </article>
 
+    <!-- Comments Section -->
+    <section class="comments-section" id="comments">
+        <h2>Comments</h2>
+
+        <div id="comments-list" class="comments-list">
+            <div class="empty-state" id="no-comments">
+                <p>No comments yet.</p>
+            </div>
+        </div>
+
+        <form id="comment-form" class="comment-form">
+            <input
+                type="text"
+                id="comment-name"
+                name="author_name"
+                placeholder="Your name"
+                required
+            />
+            <textarea
+                id="comment-body"
+                name="body"
+                placeholder="Leave a comment..."
+                rows="3"
+                required
+            ></textarea>
+            <input type="hidden" id="comment-parent-id" name="parent_id" value="" />
+            <div class="comment-form-actions">
+                <span id="replying-to" class="replying-to" style="display: none;">
+                    Replying to <strong id="replying-to-name"></strong>
+                    <button type="button" id="cancel-reply" class="cancel-reply">&times;</button>
+                </span>
+                <button type="submit">Post</button>
+            </div>
+        </form>
+    </section>
+
     <div class="entry-nav">
         <a href="/echo/{{ username }}">&larr; back to stream</a>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const USERNAME = '{{ username }}';
+    const ENTRY_ID = '{{ entry.id }}';
+    const API_BASE = `/api/journal/${USERNAME}/entry/${ENTRY_ID}/comments`;
+
+    const commentsList = document.getElementById('comments-list');
+    const noComments = document.getElementById('no-comments');
+    const form = document.getElementById('comment-form');
+    const nameInput = document.getElementById('comment-name');
+    const bodyInput = document.getElementById('comment-body');
+    const parentIdInput = document.getElementById('comment-parent-id');
+    const replyingTo = document.getElementById('replying-to');
+    const replyingToName = document.getElementById('replying-to-name');
+    const cancelReply = document.getElementById('cancel-reply');
+
+    function timeAgo(dateStr) {
+        const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+        if (seconds < 60) return 'just now';
+        if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+        if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+        return Math.floor(seconds / 86400) + 'd ago';
+    }
+
+    function renderComment(comment, depth) {
+        if (depth === undefined) depth = 0;
+        const maxIndent = 4;
+        const indent = Math.min(depth, maxIndent) * 1.5;
+
+        let html = `<div class="comment" style="margin-left: ${indent}rem;" data-id="${comment.id}">
+            <div class="comment-header">
+                <span class="comment-author">${escapeHtml(comment.author_name)}</span>
+                <time class="comment-time">${timeAgo(comment.created_at)}</time>
+            </div>
+            <div class="comment-body">${escapeHtml(comment.body)}</div>
+            <button class="reply-btn" onclick="setReply('${comment.id}', '${escapeHtml(comment.author_name)}')">reply</button>`;
+
+        if (comment.replies && comment.replies.length > 0) {
+            for (const reply of comment.replies) {
+                html += renderComment(reply, depth + 1);
+            }
+        }
+
+        html += '</div>';
+        return html;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function setReply(parentId, authorName) {
+        parentIdInput.value = parentId;
+        replyingToName.textContent = authorName;
+        replyingTo.style.display = 'inline';
+        bodyInput.focus();
+    }
+
+    cancelReply.addEventListener('click', function() {
+        parentIdInput.value = '';
+        replyingTo.style.display = 'none';
+    });
+
+    async function loadComments() {
+        try {
+            const res = await fetch(API_BASE);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            if (data.comments.length === 0) {
+                noComments.style.display = '';
+                return;
+            }
+
+            noComments.style.display = 'none';
+            let html = '';
+            for (const comment of data.comments) {
+                html += renderComment(comment, 0);
+            }
+            commentsList.innerHTML = html;
+        } catch (err) {
+            console.error('Failed to load comments:', err);
+        }
+    }
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const body = bodyInput.value.trim();
+        const authorName = nameInput.value.trim();
+        if (!body || !authorName) return;
+
+        const payload = { author_name: authorName, body: body };
+        if (parentIdInput.value) {
+            payload.parent_id = parentIdInput.value;
+        }
+
+        try {
+            const res = await fetch(API_BASE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            if (res.ok) {
+                bodyInput.value = '';
+                parentIdInput.value = '';
+                replyingTo.style.display = 'none';
+                // Remember the name for next comment
+                localStorage.setItem('echo_comment_name', authorName);
+                await loadComments();
+            }
+        } catch (err) {
+            console.error('Failed to post comment:', err);
+        }
+    });
+
+    // Restore saved name
+    const savedName = localStorage.getItem('echo_comment_name');
+    if (savedName) nameInput.value = savedName;
+
+    // Load comments on page load
+    loadComments();
+</script>
 {% endblock %}

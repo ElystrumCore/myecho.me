@@ -1,11 +1,11 @@
 """Tests for profile builders — fingerprint, beliefs, knowledge, compiler."""
 
-from echo.ingest.linkedin import MessageStats, EndorsementStats, ConnectionStats
 from echo.ingest.career import CareerHistory, CareerPosition
-from echo.profile.fingerprint import build_fingerprint
+from echo.ingest.linkedin import ConnectionStats, EndorsementStats, MessageStats
 from echo.profile.beliefs import build_belief_graph
-from echo.profile.knowledge import build_knowledge_map
 from echo.profile.compiler import compile_voice_prompt
+from echo.profile.fingerprint import build_fingerprint
+from echo.profile.knowledge import build_knowledge_map
 
 
 def _sample_message_stats() -> MessageStats:

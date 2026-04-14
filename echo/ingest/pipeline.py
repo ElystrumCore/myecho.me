@@ -1,15 +1,15 @@
 """Ingest pipeline orchestrator — coordinates parsing and profile building."""
 
+from echo.ingest.career import CareerHistory, parse_career
 from echo.ingest.linkedin import (
-    parse_messages,
-    parse_endorsements,
-    parse_connections,
-    MessageStats,
-    EndorsementStats,
     ConnectionStats,
+    EndorsementStats,
+    MessageStats,
+    parse_connections,
+    parse_endorsements,
+    parse_messages,
 )
-from echo.ingest.career import parse_career, CareerHistory
-from echo.ingest.writing import process_writing, WritingSample
+from echo.ingest.writing import WritingSample, process_writing
 
 
 class IngestPipeline:

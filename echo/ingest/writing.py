@@ -1,6 +1,6 @@
 """Writing sample processor — extracts style signals from free-form text."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

@@ -1,9 +1,8 @@
 """Tests for the ingest pipeline — LinkedIn parsers, career, writing."""
 
-from echo.ingest.linkedin import parse_messages, parse_endorsements, parse_connections
 from echo.ingest.career import parse_career
+from echo.ingest.linkedin import parse_connections, parse_endorsements, parse_messages
 from echo.ingest.writing import process_writing
-
 
 SAMPLE_MESSAGES_CSV = """CONVERSATION ID,CONVERSATION TITLE,FROM,SENDER PROFILE URL,TO,RECIPIENT PROFILE URLS,DATE,SUBJECT,CONTENT,FOLDER,ATTACHMENTS,IS MESSAGE DRAFT
 conv1,Test,CJ Ellison,url1,Other Person,url2,2024-01-15,,Hey man sounds good for sure,INBOX,,FALSE

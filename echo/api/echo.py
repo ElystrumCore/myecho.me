@@ -6,13 +6,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from echo.database import get_db
-from echo.models.profile import EchoProfile
 from echo.models.journal import (
-    JournalEntry,
-    JournalContent,
     EntryProp,
     EntryStatus,
+    JournalContent,
+    JournalEntry,
 )
+from echo.models.profile import EchoProfile
 
 router = APIRouter()
 
@@ -47,7 +47,7 @@ async def voice_to_text(
     The raw transcript also becomes ingest data — feeding the BeliefGraph
     with newly detected positions from spoken words.
     """
-    from echo.engine.transcribe import transcribe_audio, polish_transcript
+    from echo.engine.transcribe import polish_transcript, transcribe_audio
 
     audio_data = await file.read()
     transcript = await transcribe_audio(audio_data, filename=file.filename or "recording.webm")

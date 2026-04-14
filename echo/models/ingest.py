@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Integer, DateTime, Enum
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echo.database import Base
@@ -36,4 +38,4 @@ class IngestSource(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="ingest_sources")
+    user: Mapped[User] = relationship(back_populates="ingest_sources")

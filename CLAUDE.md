@@ -279,6 +279,20 @@ Default props to register at init:
 - `generation_model` (string) — which LLM was used
 - `revision_count` (int) — how many times owner edited before publishing
 
+### Comment (threaded, LJ talk2 pattern)
+Visitors can comment on published entries without an account. Threading uses the same parent_id pattern as LJ's talk2 table. Owner can moderate (hide/delete).
+```
+- id: uuid
+- entry_id: uuid (FK → JournalEntry)
+- parent_id: uuid (nullable, FK → self)            # threaded replies
+- node_type: string (default "entry")              # LJ pattern: comments attachable to different content types
+- visitor_id: string                                # session hash (IP + UA), no account needed
+- author_name: string                               # display name they provide
+- body: text
+- status: enum (active, hidden, deleted)            # owner moderation
+- created_at: datetime
+```
+
 ### AskInteraction
 ```
 - id: uuid
@@ -338,6 +352,8 @@ Default props to register at init:
 ### Journal (Public)
 - `GET /api/journal/{username}` — published entries for a user
 - `GET /api/journal/{username}/entry/{id}` — single entry
+- `GET /api/journal/{username}/entry/{id}/comments` — threaded comments on an entry
+- `POST /api/journal/{username}/entry/{id}/comments` — post a comment (no account required)
 - `GET /api/journal/{username}/positions` — public BeliefGraph summary
 - `GET /api/journal/{username}/timeline` — career + topic timeline
 - `POST /api/journal/{username}/ask` — public Ask endpoint
@@ -346,6 +362,7 @@ Default props to register at init:
 - `GET /api/dashboard/{user_id}/overview` — stats, pending items, drift alerts
 - `GET /api/dashboard/{user_id}/drift` — drift events
 - `PUT /api/dashboard/{user_id}/drift/{event_id}/acknowledge` — acknowledge drift
+- `PUT /api/dashboard/{user_id}/comments/{comment_id}/moderate` — hide or delete a comment
 
 ---
 
@@ -434,6 +451,7 @@ echo/
 │   │   ├── profile.py      # Profile endpoints
 │   │   ├── echo.py         # Generation endpoints
 │   │   ├── theme.py        # Theme endpoints
+│   │   ├── comments.py     # Comment endpoints (public + moderation)
 │   │   ├── journal.py      # Public journal endpoints
 │   │   └── dashboard.py    # Owner dashboard endpoints
 │   └── templates/          # Jinja2 for public pages

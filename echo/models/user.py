@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, Integer
+from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echo.database import Base
@@ -18,9 +20,9 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    profile: Mapped["EchoProfile"] = relationship(back_populates="user", uselist=False)
-    ingest_sources: Mapped[list["IngestSource"]] = relationship(back_populates="user")
-    journal_entries: Mapped[list["JournalEntry"]] = relationship(back_populates="user")
-    ask_interactions: Mapped[list["AskInteraction"]] = relationship(back_populates="user")
-    drift_events: Mapped[list["DriftEvent"]] = relationship(back_populates="user")
-    theme: Mapped["ThemeConfig"] = relationship(back_populates="user", uselist=False)
+    profile: Mapped[EchoProfile] = relationship(back_populates="user", uselist=False)
+    ingest_sources: Mapped[list[IngestSource]] = relationship(back_populates="user")
+    journal_entries: Mapped[list[JournalEntry]] = relationship(back_populates="user")
+    ask_interactions: Mapped[list[AskInteraction]] = relationship(back_populates="user")
+    drift_events: Mapped[list[DriftEvent]] = relationship(back_populates="user")
+    theme: Mapped[ThemeConfig] = relationship(back_populates="user", uselist=False)

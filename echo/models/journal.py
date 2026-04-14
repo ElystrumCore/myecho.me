@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, Float, Integer, Boolean, DateTime, Enum
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -61,11 +63,14 @@ class JournalEntry(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    user: Mapped["User"] = relationship(back_populates="journal_entries")
-    content: Mapped["JournalContent"] = relationship(
+    user: Mapped[User] = relationship(back_populates="journal_entries")
+    content: Mapped[JournalContent] = relationship(
         back_populates="entry", uselist=False, cascade="all, delete-orphan"
     )
-    props: Mapped[list["EntryProp"]] = relationship(
+    props: Mapped[list[EntryProp]] = relationship(
+        back_populates="entry", cascade="all, delete-orphan"
+    )
+    comments: Mapped[list[Comment]] = relationship(
         back_populates="entry", cascade="all, delete-orphan"
     )
 
@@ -81,7 +86,7 @@ class JournalContent(Base):
     body: Mapped[str] = mapped_column(Text, default="")
     body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    entry: Mapped["JournalEntry"] = relationship(back_populates="content")
+    entry: Mapped[JournalEntry] = relationship(back_populates="content")
 
 
 # --- EntryProp: extensible metadata, LJ logprop2 pattern ---
@@ -97,8 +102,8 @@ class EntryProp(Base):
     )
     prop_value: Mapped[str] = mapped_column(Text, default="")
 
-    entry: Mapped["JournalEntry"] = relationship(back_populates="props")
-    catalog_entry: Mapped["PropCatalog"] = relationship()
+    entry: Mapped[JournalEntry] = relationship(back_populates="props")
+    catalog_entry: Mapped[PropCatalog] = relationship()
 
 
 # --- PropCatalog: registry of known property types, LJ logproplist pattern ---
@@ -123,6 +128,40 @@ DEFAULT_PROPS = [
 ]
 
 
+# --- Comment: threaded comments on entries, LJ talk2 pattern ---
+
+class CommentStatus(str, enum.Enum):
+    active = "active"
+    hidden = "hidden"       # owner-moderated
+    deleted = "deleted"
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    entry_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("journal_entries.id"), index=True)
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("comments.id"), nullable=True
+    )
+    # LJ talk2 pattern: nodetype makes comments attachable to different content types
+    node_type: Mapped[str] = mapped_column(String(32), default="entry")
+    # Visitor identity — no account required
+    visitor_id: Mapped[str] = mapped_column(String(128))   # session hash
+    author_name: Mapped[str] = mapped_column(String(128))  # display name they provide
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[CommentStatus] = mapped_column(
+        Enum(CommentStatus), default=CommentStatus.active
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    entry: Mapped[JournalEntry] = relationship(back_populates="comments")
+    parent: Mapped[Comment | None] = relationship(
+        remote_side="Comment.id", back_populates="replies"
+    )
+    replies: Mapped[list[Comment]] = relationship(back_populates="parent")
+
+
 # --- AskInteraction: with LJ nodetype threading ---
 
 class AskInteraction(Base):
@@ -141,8 +180,8 @@ class AskInteraction(Base):
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    user: Mapped["User"] = relationship(back_populates="ask_interactions")
-    parent: Mapped["AskInteraction | None"] = relationship(remote_side="AskInteraction.id")
+    user: Mapped[User] = relationship(back_populates="ask_interactions")
+    parent: Mapped[AskInteraction | None] = relationship(remote_side="AskInteraction.id")
 
 
 # --- DriftEvent: with echo_mood_at_drift ---
@@ -160,4 +199,4 @@ class DriftEvent(Base):
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    user: Mapped["User"] = relationship(back_populates="drift_events")
+    user: Mapped[User] = relationship(back_populates="drift_events")

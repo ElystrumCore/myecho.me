@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from echo.database import get_db
-from echo.models.journal import JournalEntry, AskInteraction, DriftEvent, EntryStatus
+from echo.models.journal import AskInteraction, DriftEvent, EntryStatus, JournalEntry
 
 router = APIRouter()
 
@@ -33,7 +33,7 @@ async def dashboard_overview(user_id: uuid.UUID, db: Session = Depends(get_db)):
     )
     unacknowledged_drift = (
         db.query(DriftEvent)
-        .filter(DriftEvent.user_id == user_id, DriftEvent.acknowledged == False)
+        .filter(DriftEvent.user_id == user_id, DriftEvent.acknowledged.is_(False))
         .count()
     )
     return {

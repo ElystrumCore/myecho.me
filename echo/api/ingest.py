@@ -1,10 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
 from echo.database import get_db
-from echo.models.ingest import IngestSource, SourceType, IngestStatus
+from echo.models.ingest import IngestSource, IngestStatus, SourceType
 
 router = APIRouter()
 

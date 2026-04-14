@@ -91,11 +91,13 @@ def parse_messages(csv_content: str, user_name: str) -> MessageStats:
     # Length distribution
     lengths.sort()
     mid = len(lengths) // 2
-    stats.median_length = lengths[mid] if len(lengths) % 2 else (lengths[mid - 1] + lengths[mid]) / 2
+    stats.median_length = (
+        lengths[mid] if len(lengths) % 2 else (lengths[mid - 1] + lengths[mid]) / 2
+    )
 
-    short = sum(1 for l in lengths if l < 100)
-    medium = sum(1 for l in lengths if 100 <= l < 500)
-    long = sum(1 for l in lengths if l >= 500)
+    short = sum(1 for length in lengths if length < 100)
+    medium = sum(1 for length in lengths if 100 <= length < 500)
+    long = sum(1 for length in lengths if length >= 500)
     total = len(lengths)
     stats.length_distribution = {
         "short_pct": round(short / total * 100, 1),
@@ -110,7 +112,6 @@ def parse_messages(csv_content: str, user_name: str) -> MessageStats:
     # Openers
     opener_counter = Counter()
     for msg in user_messages:
-        first_word = msg.split()[0].lower().rstrip("!,.")
         for opener in COMMON_OPENERS:
             if msg.lower().startswith(opener):
                 opener_counter[opener] += 1
@@ -120,7 +121,8 @@ def parse_messages(csv_content: str, user_name: str) -> MessageStats:
     # Closers — last word/phrase of messages
     closer_counter = Counter()
     for msg in user_messages:
-        last_words = msg.strip().rstrip(".!?").split()[-2:] if len(msg.split()) >= 2 else msg.split()
+        words = msg.strip().rstrip(".!?").split()
+        last_words = words[-2:] if len(words) >= 2 else words
         last_phrase = " ".join(last_words).lower()
         closer_counter[last_phrase] += 1
     stats.closers = dict(closer_counter.most_common(10))

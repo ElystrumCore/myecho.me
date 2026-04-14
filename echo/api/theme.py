@@ -1,13 +1,13 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from echo.database import get_db
-from echo.models.theme import ThemeConfig, ThemeGeneratedBy
-from echo.models.profile import EchoProfile
 from echo.engine.themes import generate_theme, get_base_theme, theme_to_css_vars
+from echo.models.profile import EchoProfile
+from echo.models.theme import ThemeConfig, ThemeGeneratedBy
 
 router = APIRouter()
 

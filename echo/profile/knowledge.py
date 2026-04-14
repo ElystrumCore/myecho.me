@@ -1,7 +1,7 @@
 """KnowledgeMap builder — what the user knows."""
 
-from echo.ingest.linkedin import EndorsementStats, ConnectionStats
 from echo.ingest.career import CareerHistory
+from echo.ingest.linkedin import ConnectionStats, EndorsementStats
 
 
 def build_knowledge_map(

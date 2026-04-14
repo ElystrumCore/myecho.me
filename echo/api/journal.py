@@ -3,9 +3,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from echo.database import get_db
-from echo.models.user import User
-from echo.models.journal import JournalEntry, JournalContent, EntryStatus, EntrySecurity
+from echo.models.journal import EntrySecurity, EntryStatus, JournalEntry
 from echo.models.profile import EchoProfile
+from echo.models.user import User
 
 router = APIRouter()
 

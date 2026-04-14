@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, Integer, DateTime, Enum
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,4 +36,4 @@ class ThemeConfig(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    user: Mapped["User"] = relationship(back_populates="theme")
+    user: Mapped[User] = relationship(back_populates="theme")

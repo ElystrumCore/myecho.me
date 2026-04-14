@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, Text, DateTime
+from sqlalchemy import DateTime, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,4 +25,4 @@ class EchoProfile(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    user: Mapped["User"] = relationship(back_populates="profile")
+    user: Mapped[User] = relationship(back_populates="profile")

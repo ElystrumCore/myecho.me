@@ -7,7 +7,6 @@ voice prompt so the output matches their StyleFingerprint.
 
 from echo.engine.voice import generate_text
 
-
 # Available assist actions and their prompt templates.
 # The editor UI maps each action to one of these keys.
 ASSIST_ACTIONS = {
