@@ -20,13 +20,14 @@ import "@blocknote/mantine/style.css";
 
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { assistInline } from "../api";
 
 interface EchoEditorProps {
   userId: string;
   initialContent?: string;
   onSave?: (content: string) => void;
+  onInsertRef?: (fn: (text: string) => void) => void;
 }
 
 /**
@@ -42,12 +43,38 @@ const AI_ACTIONS = [
   { key: "position", label: "What would I say about this" },
 ] as const;
 
-export function EchoEditor({ userId, onSave }: EchoEditorProps) {
+export function EchoEditor({ userId, onSave, onInsertRef }: EchoEditorProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<string | null>(null);
   const [selectedText, setSelectedText] = useState("");
 
   const editor = useCreateBlockNote();
+
+  // Expose an insert function so VoiceRecorder (or other components) can inject text
+  useEffect(() => {
+    if (onInsertRef) {
+      onInsertRef((text: string) => {
+        const paragraphs = text.split("\n\n").filter(Boolean);
+        const blocks = paragraphs.map((p) => {
+          // Detect headings (lines starting with #)
+          const headingMatch = p.match(/^(#{1,3})\s+(.+)/);
+          if (headingMatch) {
+            return {
+              type: "heading" as const,
+              props: { level: headingMatch[1].length as 1 | 2 | 3 },
+              content: headingMatch[2],
+            };
+          }
+          return { type: "paragraph" as const, content: p };
+        });
+        editor.insertBlocks(
+          blocks,
+          editor.document[editor.document.length - 1],
+          "after"
+        );
+      });
+    }
+  }, [editor, onInsertRef]);
 
   const handleAiAction = useCallback(
     async (action: string, instruction?: string) => {

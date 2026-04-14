@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     llm_model: str = "claude-sonnet-4-20250514"
     llm_max_tokens: int = 4096
 
+    # Whisper (voice-to-text)
+    whisper_api_url: str = "https://api.openai.com/v1/audio/transcriptions"
+    whisper_api_key: str = ""  # OpenAI API key for Whisper
+    whisper_model: str = "whisper-1"
+
     # Storage
     upload_dir: str = "data/uploads"
     sample_dir: str = "data/sample"

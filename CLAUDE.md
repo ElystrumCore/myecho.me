@@ -157,9 +157,14 @@ The component that generates text in the user's voice. For Phase 0 this is a pro
 - Build a system prompt constructor that takes StyleFingerprint + BeliefGraph + KnowledgeMap and produces an LLM system prompt
 - The prompt should instruct the model to write as the user — using their vocabulary patterns, sentence length distribution, tone markers, and topical positions
 - Use Claude API (or configurable LLM backend) for generation
-- Two modes:
+- Three modes:
   - **Journal mode**: Generate a blog post on a topic in the user's voice. User provides topic or Echo suggests based on BeliefGraph topics.
   - **Ask mode**: Answer a visitor's question in the user's voice, drawing from BeliefGraph positions and KnowledgeMap expertise.
+  - **Assist mode**: Inline editor AI — rewrite selected text, continue thoughts, adjust tone. Used by BlockNote's AI actions.
+- Voice input pipeline:
+  - Owner records audio in the dashboard → Whisper transcribes → transcript runs through voice engine → polished draft appears in BlockNote
+  - Raw transcripts also feed the BeliefGraph (new positions) and StyleFingerprint (spoken vs. written voice)
+  - Phase 0: Whisper API ($0.006/min). Future: self-hosted Whisper Large V3 Turbo or Distil-Whisper
 
 ### 4. Journal Surface (Frontend)
 
@@ -323,6 +328,7 @@ Default props to register at init:
 - `POST /api/profile/{user_id}/rebuild` — trigger profile rebuild from all sources
 
 ### Echo Engine
+- `POST /api/echo/{user_id}/voice` — upload audio → Whisper transcription → optional polish in user's voice
 - `POST /api/echo/{user_id}/generate` — generate a journal post (topic optional)
 - `POST /api/echo/{user_id}/ask` — ask the Echo a question, get response
 - `POST /api/echo/{user_id}/assist` — inline editor AI assist (selected text + instruction → rewritten in voice)
@@ -419,6 +425,7 @@ echo/
 │   │   ├── journal.py      # Journal post generation
 │   │   ├── ask.py          # Ask response generation
 │   │   ├── assist.py       # Inline editor AI assist
+│   │   ├── transcribe.py   # Whisper voice-to-text
 │   │   ├── themes.py       # Theme generation engine
 │   │   └── drift.py        # Drift detection
 │   ├── api/
@@ -446,7 +453,8 @@ echo/
 │       ├── App.tsx
 │       ├── api.ts           # Echo API client
 │       └── components/
-│           └── EchoEditor.tsx  # BlockNote editor wired to Echo voice engine
+│           ├── EchoEditor.tsx     # BlockNote editor wired to Echo voice engine
+│           └── VoiceRecorder.tsx  # Audio recording + Whisper transcription
 ├── tests/
 │   ├── test_ingest.py
 │   ├── test_profile.py

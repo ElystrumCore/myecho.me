@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,42 @@ class AssistRequest(BaseModel):
     text: str
     action: str = "rewrite"
     instruction: str | None = None
+
+
+@router.post("/{user_id}/voice")
+async def voice_to_text(
+    user_id: uuid.UUID,
+    file: UploadFile = File(...),
+    polish: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Record → transcribe → polish → draft.
+
+    Accepts audio (webm, mp3, wav, m4a), transcribes via Whisper,
+    optionally polishes through the voice engine, and returns both
+    the raw transcript and the polished version.
+
+    The raw transcript also becomes ingest data — feeding the BeliefGraph
+    with newly detected positions from spoken words.
+    """
+    from echo.engine.transcribe import transcribe_audio, polish_transcript
+
+    audio_data = await file.read()
+    transcript = await transcribe_audio(audio_data, filename=file.filename or "recording.webm")
+
+    result = {
+        "raw_transcript": transcript.text,
+        "language": transcript.language,
+        "duration_seconds": transcript.duration_seconds,
+    }
+
+    if polish:
+        profile = db.query(EchoProfile).filter(EchoProfile.user_id == user_id).first()
+        if profile and profile.voice_prompt:
+            polished = polish_transcript(profile.voice_prompt, transcript.text)
+            result["polished"] = polished
+
+    return result
 
 
 @router.post("/{user_id}/generate")
