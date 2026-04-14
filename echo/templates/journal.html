@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}{{ display_name }}'s Echo{% endblock %}
+
+{% block nav %}
+<div class="nav-links">
+    <a href="/echo/{{ username }}">stream</a>
+    <a href="/echo/{{ username }}/about">about</a>
+    <a href="/echo/{{ username }}/ask">ask</a>
+    <a href="/echo/{{ username }}/timeline">timeline</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="journal">
+    <div class="journal-header">
+        <h1>{{ display_name }}</h1>
+        <p class="tagline">your voice, persisting.</p>
+    </div>
+
+    <div class="stream">
+        {% for entry in entries %}
+        <article class="entry">
+            <h2><a href="/echo/{{ username }}/entry/{{ entry.id }}">{{ entry.title }}</a></h2>
+            <div class="entry-content">
+                {{ entry.content | safe }}
+            </div>
+            <div class="entry-meta">
+                <time>{{ entry.published_at }}</time>
+                {% for tag in entry.topic_tags %}
+                <span class="tag">{{ tag }}</span>
+                {% endfor %}
+                <span class="echo-label">echo-generated</span>
+            </div>
+        </article>
+        {% else %}
+        <div class="empty-state">
+            <p>No posts yet. This Echo is still learning.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

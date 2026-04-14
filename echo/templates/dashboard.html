@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Echo{% endblock %}
+
+{% block nav %}
+<div class="nav-links">
+    <a href="/dashboard" class="active">dashboard</a>
+    <a href="/dashboard/profile">profile</a>
+    <a href="/dashboard/ingest">ingest</a>
+    <a href="/dashboard/settings">settings</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1>Echo Dashboard</h1>
+
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <span class="stat-number">{{ stats.pending_drafts }}</span>
+            <span class="stat-label">pending drafts</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-number">{{ stats.published_entries }}</span>
+            <span class="stat-label">published</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-number">{{ stats.total_asks }}</span>
+            <span class="stat-label">questions answered</span>
+        </div>
+        <div class="stat-card {% if stats.unacknowledged_drift_events > 0 %}alert{% endif %}">
+            <span class="stat-number">{{ stats.unacknowledged_drift_events }}</span>
+            <span class="stat-label">drift alerts</span>
+        </div>
+    </div>
+
+    {% if drafts %}
+    <section class="dashboard-section">
+        <h2>Pending Drafts</h2>
+        {% for draft in drafts %}
+        <div class="draft-card">
+            <h3>{{ draft.title }}</h3>
+            <time>{{ draft.created_at }}</time>
+            <div class="draft-actions">
+                <button class="btn-publish" data-id="{{ draft.id }}">Publish</button>
+                <button class="btn-edit" data-id="{{ draft.id }}">Edit</button>
+                <button class="btn-archive" data-id="{{ draft.id }}">Archive</button>
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if drift_events %}
+    <section class="dashboard-section">
+        <h2>Drift Alerts</h2>
+        {% for event in drift_events %}
+        <div class="drift-card {% if not event.acknowledged %}unacknowledged{% endif %}">
+            <h3>{{ event.topic }}</h3>
+            <div class="drift-comparison">
+                <div class="drift-original">
+                    <span class="label">was:</span>
+                    <p>{{ event.original_position }}</p>
+                </div>
+                <div class="drift-current">
+                    <span class="label">now:</span>
+                    <p>{{ event.current_position }}</p>
+                </div>
+            </div>
+            <div class="drift-meta">
+                <span class="drift-score">drift: {{ (event.drift_score * 100) | round }}%</span>
+                {% if not event.acknowledged %}
+                <button class="btn-acknowledge" data-id="{{ event.id }}">Acknowledge</button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

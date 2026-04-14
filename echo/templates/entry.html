@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}{{ entry.title }} — {{ display_name }}'s Echo{% endblock %}
+
+{% block nav %}
+<div class="nav-links">
+    <a href="/echo/{{ username }}">stream</a>
+    <a href="/echo/{{ username }}/about">about</a>
+    <a href="/echo/{{ username }}/ask">ask</a>
+    <a href="/echo/{{ username }}/timeline">timeline</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="journal">
+    <article class="entry entry-full">
+        <h1>{{ entry.title }}</h1>
+        <div class="entry-meta">
+            <time>{{ entry.published_at }}</time>
+            {% for tag in entry.topic_tags %}
+            <span class="tag">{{ tag }}</span>
+            {% endfor %}
+            <span class="echo-label">echo-generated</span>
+        </div>
+        <div class="entry-content">
+            {{ entry.content | safe }}
+        </div>
+    </article>
+
+    <div class="entry-nav">
+        <a href="/echo/{{ username }}">&larr; back to stream</a>
+    </div>
+</div>
+{% endblock %}

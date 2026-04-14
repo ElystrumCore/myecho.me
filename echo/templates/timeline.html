@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}{{ display_name }}'s Timeline{% endblock %}
+
+{% block nav %}
+<div class="nav-links">
+    <a href="/echo/{{ username }}">stream</a>
+    <a href="/echo/{{ username }}/about">about</a>
+    <a href="/echo/{{ username }}/ask">ask</a>
+    <a href="/echo/{{ username }}/timeline" class="active">timeline</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="journal">
+    <h1>Timeline</h1>
+    <p class="timeline-intro">
+        How {{ display_name }}'s career and thinking have evolved over time.
+    </p>
+
+    <div class="timeline">
+        {% if domains %}
+        {% for domain in domains %}
+        <div class="timeline-domain">
+            <h2>{{ domain.name }}</h2>
+            <div class="timeline-meta">
+                <span class="depth">{{ domain.depth }}</span>
+                <span class="years">{{ domain.years }} years</span>
+            </div>
+            {% if domain.roles_held %}
+            <div class="timeline-roles">
+                {% for role in domain.roles_held %}
+                <span class="role">{{ role }}</span>
+                {% if not loop.last %}<span class="arrow">&rarr;</span>{% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state">
+            <p>Timeline data not yet available.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Echo{% endblock %} — myecho.me</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="site-header">
+        <nav>
+            <a href="/" class="logo">echo</a>
+            {% block nav %}{% endblock %}
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="site-footer">
+        <p>
+            <span class="echo-label">echo-generated</span> &middot;
+            <a href="https://myecho.me">myecho.me</a> &middot;
+            your voice, persisting.
+        </p>
+    </footer>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

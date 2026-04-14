@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Ask {{ display_name }}'s Echo{% endblock %}
+
+{% block nav %}
+<div class="nav-links">
+    <a href="/echo/{{ username }}">stream</a>
+    <a href="/echo/{{ username }}/about">about</a>
+    <a href="/echo/{{ username }}/ask" class="active">ask</a>
+    <a href="/echo/{{ username }}/timeline">timeline</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="journal">
+    <div class="ask-section">
+        <h1>Ask {{ display_name }}'s Echo</h1>
+        <p class="ask-intro">
+            Ask a question and {{ display_name }}'s Echo will respond in their voice,
+            from their knowledge and positions.
+        </p>
+
+        <form id="ask-form" class="ask-form">
+            <textarea
+                id="question"
+                name="question"
+                placeholder="What does {{ display_name }} think about...?"
+                rows="3"
+                required
+            ></textarea>
+            <button type="submit">Ask</button>
+        </form>
+
+        <div id="response-area" class="response-area" style="display: none;">
+            <div class="response-content" id="response-content"></div>
+            <div class="response-meta">
+                <span class="echo-label">echo-generated</span>
+                <span class="confidence" id="confidence"></span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const form = document.getElementById('ask-form');
+    const responseArea = document.getElementById('response-area');
+    const responseContent = document.getElementById('response-content');
+    const confidence = document.getElementById('confidence');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const question = document.getElementById('question').value;
+
+        responseArea.style.display = 'block';
+        responseContent.textContent = 'Thinking...';
+        confidence.textContent = '';
+
+        try {
+            const res = await fetch('/api/journal/{{ username }}/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question }),
+            });
+            const data = await res.json();
+            responseContent.textContent = data.response;
+            confidence.textContent = `confidence: ${Math.round(data.confidence * 100)}%`;
+        } catch (err) {
+            responseContent.textContent = 'Something went wrong. Try again.';
+        }
+    });
+</script>
+{% endblock %}
