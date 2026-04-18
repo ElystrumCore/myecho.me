@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8004
 
-    # Database
-    database_url: str = "postgresql://localhost:5432/echo"
+    # Database (set ECHO_DATABASE_URL in .env)
+    database_url: str = ""
 
     # LLM
     anthropic_api_key: str = ""

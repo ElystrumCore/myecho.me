@@ -78,31 +78,38 @@ async def generate_post(
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found — run ingest first")
 
-    # TODO: call engine.journal.generate with profile + topic
+    from echo.engine.journal import generate_post
+
+    result = generate_post(profile.voice_prompt, topic=request.topic)
+
     entry = JournalEntry(
         user_id=user_id,
-        title=f"On {request.topic or 'things on my mind'}",
+        title=result["title"],
         status=EntryStatus.pending_review,
+        generated_by="echo",
         generation_prompt=request.topic,
     )
     db.add(entry)
     db.flush()
 
-    # Separate content table (LJ logtext2 pattern)
     content = JournalContent(
         entry_id=entry.id,
-        body="[generation pending — engine not yet wired]",
+        body=result["content"],
     )
     db.add(content)
 
-    # Topic tags via props system (LJ logprop2 pattern)
     if request.topic:
         prop = EntryProp(entry_id=entry.id, prop_key="topic_tags", prop_value=request.topic)
         db.add(prop)
 
     db.commit()
     db.refresh(entry)
-    return {"entry_id": entry.id, "status": entry.status, "title": entry.title}
+    return {
+        "entry_id": str(entry.id),
+        "status": entry.status,
+        "title": entry.title,
+        "content": result["content"],
+    }
 
 
 @router.post("/{user_id}/ask")
@@ -116,11 +123,13 @@ async def ask_echo(
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    # TODO: call engine.ask.respond with profile + question
+    from echo.engine.ask import respond
+
+    result = respond(profile.voice_prompt, request.question)
     return {
         "question": request.question,
-        "response": "[response pending — engine not yet wired]",
-        "confidence": 0.0,
+        "response": result["response"],
+        "confidence": result["confidence"],
     }
 
 

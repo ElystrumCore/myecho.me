@@ -109,9 +109,11 @@ async def public_ask(
     if not profile:
         raise HTTPException(status_code=404, detail="Echo not ready yet")
 
-    # TODO: call engine.ask.respond
+    from echo.engine.ask import respond
+
+    result = respond(profile.voice_prompt, request.question)
     return {
         "question": request.question,
-        "response": "[response pending — engine not yet wired]",
-        "confidence": 0.0,
+        "response": result["response"],
+        "confidence": result["confidence"],
     }

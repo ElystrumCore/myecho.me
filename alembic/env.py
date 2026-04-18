@@ -6,7 +6,14 @@ from alembic import context
 from echo.database import Base
 from echo.models import *  # noqa: F401,F403 — register all models
 
+import os
+
 config = context.config
+
+# Override from environment if available
+db_url = os.getenv("ECHO_DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+config.set_main_option("sqlalchemy.url", db_url)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

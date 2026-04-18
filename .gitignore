@@ -47,3 +47,6 @@ alembic/versions/__pycache__/
 frontend/node_modules/
 frontend/dist/
 echo/static/dashboard/
+data/exports/
+data/profile/
+.env
