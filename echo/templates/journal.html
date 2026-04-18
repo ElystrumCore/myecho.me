@@ -4,38 +4,44 @@
 
 {% block nav %}
 <div class="nav-links">
-    <a href="/echo/{{ username }}">stream</a>
-    <a href="/echo/{{ username }}/about">about</a>
+    <a href="/echo/{{ username }}" class="active">stream</a>
     <a href="/echo/{{ username }}/ask">ask</a>
-    <a href="/echo/{{ username }}/timeline">timeline</a>
 </div>
 {% endblock %}
 
 {% block content %}
 <div class="journal">
-    <div class="journal-header">
+    <aside class="journal-sidebar">
+        <div class="monogram">CJE</div>
         <h1>{{ display_name }}</h1>
-        <p class="tagline">your voice, persisting.</p>
-    </div>
+        <div class="location">Grande Prairie, AB</div>
+        <div class="tagline">your voice, persisting.</div>
+
+        <nav class="sidebar-nav">
+            <a href="/echo/{{ username }}" class="active">stream</a>
+            <a href="/echo/{{ username }}/ask">ask</a>
+        </nav>
+
+        <div class="sidebar-meta">
+            6,060 messages trained<br>
+            85% avg confidence<br>
+            2 platforms
+        </div>
+    </aside>
 
     <div class="stream">
         {% for entry in entries %}
         <article class="entry">
             <h2><a href="/echo/{{ username }}/entry/{{ entry.id }}">{{ entry.title }}</a></h2>
-            <div class="entry-content">
-                {{ entry.content | safe }}
-            </div>
+            <div class="entry-content">{{ entry.content | safe }}</div>
             <div class="entry-meta">
                 <time>{{ entry.published_at }}</time>
-                {% for tag in entry.topic_tags %}
-                <span class="tag">{{ tag }}</span>
-                {% endfor %}
                 <span class="echo-label">echo-generated</span>
             </div>
         </article>
         {% else %}
         <div class="empty-state">
-            <p>No posts yet. This Echo is still learning.</p>
+            <p>Nothing published yet. <a href="/echo/{{ username }}/ask">Ask me something instead.</a></p>
         </div>
         {% endfor %}
     </div>

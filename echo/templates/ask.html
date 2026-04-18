@@ -5,30 +5,28 @@
 {% block nav %}
 <div class="nav-links">
     <a href="/echo/{{ username }}">stream</a>
-    <a href="/echo/{{ username }}/about">about</a>
     <a href="/echo/{{ username }}/ask" class="active">ask</a>
-    <a href="/echo/{{ username }}/timeline">timeline</a>
 </div>
 {% endblock %}
 
 {% block content %}
-<div class="journal">
+<div class="ask-layout">
     <div class="ask-section">
         <h1>Ask {{ display_name }}'s Echo</h1>
         <p class="ask-intro">
-            Ask a question and {{ display_name }}'s Echo will respond in their voice,
-            from their knowledge and positions.
+            Built from 6,060 real messages across 2 platforms.
+            Ask a question — Echo responds in {{ display_name }}'s voice.
         </p>
 
         <form id="ask-form" class="ask-form">
             <textarea
                 id="question"
                 name="question"
-                placeholder="What does {{ display_name }} think about...?"
+                placeholder="What do you think about AI in oil & gas?"
                 rows="3"
                 required
             ></textarea>
-            <button type="submit">Ask</button>
+            <button type="submit" title="Ask (Enter)">&#8594;</button>
         </form>
 
         <div id="response-area" class="response-area" style="display: none;">
@@ -48,13 +46,31 @@
     const responseArea = document.getElementById('response-area');
     const responseContent = document.getElementById('response-content');
     const confidence = document.getElementById('confidence');
+    const textarea = document.getElementById('question');
+
+    // Cycling placeholder questions
+    const placeholders = [
+        "What do you think about AI in oil & gas?",
+        "How do you approach a new construction project?",
+        "What makes Grande Prairie different?",
+        "What's the hardest part of building something solo?",
+        "Why did you start building AI systems?",
+        "What does the Peace Region workforce look like?",
+    ];
+    let placeholderIdx = 0;
+    setInterval(() => {
+        placeholderIdx = (placeholderIdx + 1) % placeholders.length;
+        if (!textarea.value && document.activeElement !== textarea) {
+            textarea.placeholder = placeholders[placeholderIdx];
+        }
+    }, 4000);
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const question = document.getElementById('question').value;
+        const question = textarea.value;
 
         responseArea.style.display = 'block';
-        responseContent.textContent = 'Thinking...';
+        responseContent.innerHTML = '<div class="thinking"><span></span><span></span><span></span></div>';
         confidence.textContent = '';
 
         try {
@@ -68,6 +84,14 @@
             confidence.textContent = `confidence: ${Math.round(data.confidence * 100)}%`;
         } catch (err) {
             responseContent.textContent = 'Something went wrong. Try again.';
+        }
+    });
+
+    // Submit on Enter (Shift+Enter for newline)
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit'));
         }
     });
 </script>
