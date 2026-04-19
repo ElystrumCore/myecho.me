@@ -23,9 +23,8 @@
         </nav>
 
         <div class="sidebar-meta">
-            6,060 messages trained<br>
-            85% avg confidence<br>
-            2 platforms
+            {{ stats.total_messages | default('0') }} messages trained<br>
+            {{ stats.sources | default('0') }} platforms
         </div>
     </aside>
 

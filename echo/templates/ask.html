@@ -14,7 +14,7 @@
     <div class="ask-section">
         <h1>Ask {{ display_name }}'s Echo</h1>
         <p class="ask-intro">
-            Built from 6,060 real messages across 2 platforms.
+            Built from {{ stats.total_messages | default('0') }} real messages across {{ stats.sources | default('0') }} platforms.
             Ask a question — Echo responds in {{ display_name }}'s voice.
         </p>
 

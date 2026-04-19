@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from echo.api.auth import router as auth_router
 from echo.api.comments import router as comments_router
 from echo.api.dashboard import router as dashboard_router
 from echo.api.echo import router as echo_router
@@ -29,6 +30,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 # API routes
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(ingest_router, prefix="/api/ingest", tags=["ingest"])
 app.include_router(profile_router, prefix="/api/profile", tags=["profile"])
 app.include_router(echo_router, prefix="/api/echo", tags=["echo"])
@@ -57,6 +59,7 @@ async def journal_page(username: str, request: Request):
     """Public journal stream for a user."""
     from echo.models.user import User
     from echo.models.journal import JournalEntry, JournalContent, EntryStatus
+    from echo.models.profile import EchoProfile
 
     db = SessionLocal()
     try:
@@ -64,7 +67,7 @@ async def journal_page(username: str, request: Request):
         if not user:
             return templates.TemplateResponse("journal.html", {
                 "request": request, "username": username,
-                "display_name": username, "entries": [],
+                "display_name": username, "entries": [], "stats": {},
             })
 
         entries = (
@@ -86,11 +89,20 @@ async def journal_page(username: str, request: Request):
                 "topic_tags": [],
             })
 
+        # Pull real stats from profile
+        profile = db.query(EchoProfile).filter(EchoProfile.user_id == user.id).first()
+        stats = {}
+        if profile and profile.style_fingerprint:
+            fp = profile.style_fingerprint
+            stats["total_messages"] = f"{fp.get('structure', {}).get('total_messages', 0):,}"
+            stats["sources"] = len(fp.get("sources", {}))
+
         return templates.TemplateResponse("journal.html", {
             "request": request,
             "username": username,
             "display_name": user.display_name,
             "entries": entry_data,
+            "stats": stats,
         })
     finally:
         db.close()
@@ -100,15 +112,26 @@ async def journal_page(username: str, request: Request):
 async def ask_page(username: str, request: Request):
     """Public Ask page."""
     from echo.models.user import User
+    from echo.models.profile import EchoProfile
 
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.username == username).first()
         display_name = user.display_name if user else username
+
+        stats = {}
+        if user:
+            profile = db.query(EchoProfile).filter(EchoProfile.user_id == user.id).first()
+            if profile and profile.style_fingerprint:
+                fp = profile.style_fingerprint
+                stats["total_messages"] = f"{fp.get('structure', {}).get('total_messages', 0):,}"
+                stats["sources"] = len(fp.get("sources", {}))
+
         return templates.TemplateResponse("ask.html", {
             "request": request,
             "username": username,
             "display_name": display_name,
+            "stats": stats,
         })
     finally:
         db.close()

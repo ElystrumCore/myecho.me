@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import DateTime, Integer, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echo.database import Base
@@ -23,6 +23,10 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(256))
     email: Mapped[str] = mapped_column(String(320), unique=True)
+    uin: Mapped[int] = mapped_column(Integer, unique=True, nullable=True)
+    echo_address: Mapped[str] = mapped_column(String(128), unique=True, nullable=True)
+    pubkey: Mapped[bytes] = mapped_column(LargeBinary, nullable=True)
+    privkey_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=True)
     profile_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
