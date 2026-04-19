@@ -11,6 +11,12 @@ from echo.models.journal import (
 from echo.models.profile import EchoProfile
 from echo.models.theme import ThemeConfig
 from echo.models.user import User
+from echo.models.exchange import (
+    Letter,
+    GhostDraft,
+    GhostSettings,
+    GuestbookEntry,
+)
 
 __all__ = [
     "User",
@@ -24,4 +30,8 @@ __all__ = [
     "Comment",
     "AskInteraction",
     "DriftEvent",
+    "Letter",
+    "GhostDraft",
+    "GhostSettings",
+    "GuestbookEntry",
 ]

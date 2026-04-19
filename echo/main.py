@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from echo.api.auth import router as auth_router
 from echo.api.comments import router as comments_router
+from echo.api.exchange import router as exchange_router
 from echo.api.dashboard import router as dashboard_router
 from echo.api.echo import router as echo_router
 from echo.api.ingest import router as ingest_router
@@ -38,6 +39,7 @@ app.include_router(journal_router, prefix="/api/journal", tags=["journal"])
 app.include_router(dashboard_router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(theme_router, prefix="/api/echo", tags=["theme"])
 app.include_router(comments_router, prefix="/api/journal", tags=["comments"])
+app.include_router(exchange_router, prefix="/exchange", tags=["exchange"])
 
 
 @app.get("/")
