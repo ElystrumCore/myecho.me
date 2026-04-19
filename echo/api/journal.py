@@ -111,9 +111,14 @@ async def public_ask(
 
     from echo.engine.ask import respond
 
-    result = respond(profile.voice_prompt, request.question)
+    result = respond(
+        profile.voice_prompt,
+        request.question,
+        belief_graph=profile.belief_graph,
+    )
     return {
         "question": request.question,
         "response": result["response"],
         "confidence": result["confidence"],
+        "resonant_topics": result.get("resonant_topics", []),
     }

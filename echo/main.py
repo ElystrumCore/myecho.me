@@ -159,7 +159,11 @@ async def public_ask(username: str, request: Request):
         if not profile or not profile.voice_prompt:
             return {"response": "Echo is still learning. Check back later.", "confidence": 0}
 
-        result = respond(profile.voice_prompt, question)
+        result = respond(
+            profile.voice_prompt,
+            question,
+            belief_graph=profile.belief_graph,
+        )
         return result
     finally:
         db.close()

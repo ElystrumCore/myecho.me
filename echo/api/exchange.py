@@ -129,6 +129,7 @@ async def send_letter(req: SendLetterRequest, db: Session = Depends(get_db)):
                 profile.voice_prompt,
                 f"You received a letter:\n\nSubject: {req.subject or '(none)'}\n\n{req.body}\n\n"
                 "Write a reply as yourself — warm, personal, in your voice.",
+                belief_graph=profile.belief_graph,
             )
 
             envelope = {
