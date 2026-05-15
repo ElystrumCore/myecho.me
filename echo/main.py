@@ -16,6 +16,7 @@ from echo.api.ingest import router as ingest_router
 from echo.api.journal import router as journal_router
 from echo.api.profile import router as profile_router
 from echo.api.theme import router as theme_router
+from echo.api.voice import router as voice_router
 from echo.config import settings
 from echo.database import get_db, SessionLocal
 
@@ -40,6 +41,9 @@ app.include_router(dashboard_router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(theme_router, prefix="/api/echo", tags=["theme"])
 app.include_router(comments_router, prefix="/api/journal", tags=["comments"])
 app.include_router(exchange_router, prefix="/exchange", tags=["exchange"])
+# PGE integration: voice generation endpoint at /voice/generate matching
+# myecho_client contract. See echo/api/voice.py for the contract.
+app.include_router(voice_router, prefix="/voice", tags=["voice-pge"])
 
 
 @app.get("/")
