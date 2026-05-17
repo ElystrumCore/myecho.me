@@ -236,3 +236,26 @@ def test_ingest_status_without_auth_returns_401(client):
         "/api/ingest/status/00000000-0000-0000-0000-000000000000"
     )
     assert resp.status_code == 401
+
+
+# ============================================================================
+# Deploy-T7: /api/dashboard/* gating
+# ============================================================================
+
+def test_dashboard_overview_without_auth_returns_401(client):
+    resp = client.get("/api/dashboard/00000000-0000-0000-0000-000000000000/overview")
+    assert resp.status_code == 401
+
+
+def test_dashboard_drift_without_auth_returns_401(client):
+    resp = client.get("/api/dashboard/00000000-0000-0000-0000-000000000000/drift")
+    assert resp.status_code == 401
+
+
+def test_dashboard_drift_acknowledge_without_auth_returns_401(client):
+    resp = client.put(
+        "/api/dashboard/00000000-0000-0000-0000-000000000000/drift/"
+        "00000000-0000-0000-0000-000000000000/acknowledge",
+        json={},
+    )
+    assert resp.status_code == 401
