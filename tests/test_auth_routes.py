@@ -10,7 +10,7 @@ import os
 # these tests exercise auth gating, not DB I/O — the routes that pass auth
 # will hit downstream failures (no profile, no model), which the tests treat
 # as "auth-passed" by asserting status NOT in (401, 403).
-os.environ.setdefault("ECHO_DATABASE_URL", "sqlite:///./test_auth_routes.db")
+os.environ["ECHO_DATABASE_URL"] = "sqlite:///:memory:"
 
 import pytest
 from fastapi.testclient import TestClient
