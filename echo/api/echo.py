@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from echo.api.auth_dep import get_authenticated_user
 from echo.database import get_db
 from echo.models.journal import (
     EntryProp,
@@ -36,6 +37,7 @@ async def voice_to_text(
     user_id: uuid.UUID,
     file: UploadFile = File(...),
     polish: bool = True,
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Record → transcribe → polish → draft.
@@ -71,6 +73,7 @@ async def voice_to_text(
 async def generate_post(
     user_id: uuid.UUID,
     request: GenerateRequest,
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Generate a journal post in the user's voice."""
@@ -116,6 +119,7 @@ async def generate_post(
 async def ask_echo(
     user_id: uuid.UUID,
     request: AskRequest,
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Ask the Echo a question, get a response in the user's voice."""
@@ -137,6 +141,7 @@ async def ask_echo(
 async def assist_inline(
     user_id: uuid.UUID,
     request: AssistRequest,
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Inline editor AI assist — rewrites selected text in the user's voice.
@@ -164,7 +169,11 @@ async def assist_inline(
 
 
 @router.get("/{user_id}/drafts")
-async def list_drafts(user_id: uuid.UUID, db: Session = Depends(get_db)):
+async def list_drafts(
+    user_id: uuid.UUID,
+    claims: dict = Depends(get_authenticated_user),
+    db: Session = Depends(get_db),
+):
     """List pending drafts for review — metadata only, no body content."""
     drafts = (
         db.query(JournalEntry)
@@ -191,6 +200,7 @@ async def update_draft(
     user_id: uuid.UUID,
     entry_id: uuid.UUID,
     action: str,
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Approve, edit, or reject a draft. action: publish | archive"""

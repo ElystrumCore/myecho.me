@@ -76,3 +76,40 @@ def test_voice_generate_with_good_token_passes_auth(client, good_token):
 def test_voice_feedback_without_auth_returns_401(client):
     resp = client.post("/voice/feedback", json={})
     assert resp.status_code == 401
+
+
+# ============================================================================
+# Deploy-T5: /api/echo/* gating
+# ============================================================================
+
+def test_echo_generate_without_auth_returns_401(client):
+    resp = client.post("/api/echo/00000000-0000-0000-0000-000000000000/generate", json={})
+    assert resp.status_code == 401
+
+
+def test_echo_assist_without_auth_returns_401(client):
+    resp = client.post("/api/echo/00000000-0000-0000-0000-000000000000/assist", json={})
+    assert resp.status_code == 401
+
+
+def test_echo_drafts_without_auth_returns_401(client):
+    resp = client.get("/api/echo/00000000-0000-0000-0000-000000000000/drafts")
+    assert resp.status_code == 401
+
+
+def test_echo_voice_upload_without_auth_returns_401(client):
+    resp = client.post("/api/echo/00000000-0000-0000-0000-000000000000/voice", json={})
+    assert resp.status_code == 401
+
+
+def test_echo_ask_without_auth_returns_401(client):
+    resp = client.post("/api/echo/00000000-0000-0000-0000-000000000000/ask", json={})
+    assert resp.status_code == 401
+
+
+def test_echo_update_draft_without_auth_returns_401(client):
+    resp = client.put(
+        "/api/echo/00000000-0000-0000-0000-000000000000/drafts/"
+        "00000000-0000-0000-0000-000000000000?action=publish"
+    )
+    assert resp.status_code == 401
