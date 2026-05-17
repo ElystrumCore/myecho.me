@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from echo.api.auth_dep import get_authenticated_user
 from echo.database import get_db
 from echo.models.journal import (
     Comment,
@@ -171,6 +172,7 @@ async def moderate_comment(
     user_id: uuid.UUID,
     comment_id: uuid.UUID,
     moderation: CommentModerate,
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Owner moderates a comment: hide or delete."""

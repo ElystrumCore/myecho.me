@@ -259,3 +259,20 @@ def test_dashboard_drift_acknowledge_without_auth_returns_401(client):
         json={},
     )
     assert resp.status_code == 401
+
+
+# ============================================================================
+# Deploy-T8 cleanup: gate comments.moderate_comment (was missed in T7)
+#
+# Comments router is mounted at /api/journal (see echo/main.py). The
+# moderate route is PUT /{user_id}/comments/{comment_id}/moderate with
+# body {"action": "hide"|"delete"} — see echo/api/comments.py.
+# ============================================================================
+
+def test_comment_moderate_without_auth_returns_401(client):
+    resp = client.put(
+        "/api/journal/00000000-0000-0000-0000-000000000000/comments/"
+        "00000000-0000-0000-0000-000000000000/moderate",
+        json={"action": "hide"},
+    )
+    assert resp.status_code == 401
