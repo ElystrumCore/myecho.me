@@ -30,9 +30,40 @@ def _env(monkeypatch):
 
 @pytest.fixture
 def client():
-    """TestClient against the full FastAPI app."""
+    """TestClient against the full FastAPI app.
+
+    Overrides get_db with a stub session because the default sqlite engine
+    was created in the main thread but TestClient dispatches requests on a
+    worker thread — sqlite refuses cross-thread use. These tests only check
+    auth gating; downstream DB behaviour is tested elsewhere. The stub
+    returns no rows, so route handlers raise 404 cleanly (which is exactly
+    what the "public GET, not 401" assertion expects).
+    """
+    from echo.database import get_db
     from echo.main import app
-    return TestClient(app)
+
+    class _StubQuery:
+        def filter(self, *a, **kw): return self
+        def first(self): return None
+        def all(self): return []
+        def order_by(self, *a, **kw): return self
+
+    class _StubSession:
+        def query(self, *a, **kw): return _StubQuery()
+        def add(self, *a, **kw): pass
+        def commit(self): pass
+        def refresh(self, *a, **kw): pass
+        def flush(self): pass
+        def close(self): pass
+
+    def _override_get_db():
+        yield _StubSession()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture
@@ -111,5 +142,97 @@ def test_echo_update_draft_without_auth_returns_401(client):
     resp = client.put(
         "/api/echo/00000000-0000-0000-0000-000000000000/drafts/"
         "00000000-0000-0000-0000-000000000000?action=publish"
+    )
+    assert resp.status_code == 401
+
+
+# ============================================================================
+# Deploy-T6: /api/profile mutations + /api/ingest/* gating
+# ============================================================================
+
+def test_profile_beliefs_put_without_auth_returns_401(client):
+    resp = client.put(
+        "/api/profile/00000000-0000-0000-0000-000000000000/beliefs",
+        json={},
+    )
+    assert resp.status_code == 401
+
+
+def test_profile_ingest_conversations_without_auth_returns_401(client):
+    resp = client.post(
+        "/api/profile/00000000-0000-0000-0000-000000000000/ingest/conversations"
+        "?source_type=claude",
+    )
+    assert resp.status_code == 401
+
+
+def test_profile_rebuild_without_auth_returns_401(client):
+    resp = client.post(
+        "/api/profile/00000000-0000-0000-0000-000000000000/rebuild",
+    )
+    assert resp.status_code == 401
+
+
+def test_profile_get_remains_public(client):
+    """Profile GETs are visitor-facing — must NOT be gated."""
+    resp = client.get("/api/profile/00000000-0000-0000-0000-000000000000")
+    # Not found is fine; 401 means we wrongly gated it.
+    assert resp.status_code != 401
+
+
+def test_profile_fingerprint_get_remains_public(client):
+    resp = client.get(
+        "/api/profile/00000000-0000-0000-0000-000000000000/fingerprint"
+    )
+    assert resp.status_code != 401
+
+
+def test_profile_beliefs_get_remains_public(client):
+    resp = client.get(
+        "/api/profile/00000000-0000-0000-0000-000000000000/beliefs"
+    )
+    assert resp.status_code != 401
+
+
+def test_profile_knowledge_get_remains_public(client):
+    resp = client.get(
+        "/api/profile/00000000-0000-0000-0000-000000000000/knowledge"
+    )
+    assert resp.status_code != 401
+
+
+def test_ingest_linkedin_messages_without_auth_returns_401(client):
+    resp = client.post("/api/ingest/linkedin/messages")
+    assert resp.status_code == 401
+
+
+def test_ingest_linkedin_endorsements_without_auth_returns_401(client):
+    resp = client.post("/api/ingest/linkedin/endorsements")
+    assert resp.status_code == 401
+
+
+def test_ingest_linkedin_connections_without_auth_returns_401(client):
+    resp = client.post("/api/ingest/linkedin/connections")
+    assert resp.status_code == 401
+
+
+def test_ingest_career_without_auth_returns_401(client):
+    resp = client.post("/api/ingest/career", json={})
+    assert resp.status_code == 401
+
+
+def test_ingest_writing_without_auth_returns_401(client):
+    resp = client.post("/api/ingest/writing")
+    assert resp.status_code == 401
+
+
+def test_ingest_declaration_without_auth_returns_401(client):
+    resp = client.post("/api/ingest/declaration")
+    assert resp.status_code == 401
+
+
+def test_ingest_status_without_auth_returns_401(client):
+    resp = client.get(
+        "/api/ingest/status/00000000-0000-0000-0000-000000000000"
     )
     assert resp.status_code == 401

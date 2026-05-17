@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
+from echo.api.auth_dep import get_authenticated_user
 from echo.database import get_db
 from echo.models.ingest import IngestSource, IngestStatus, SourceType
 
@@ -13,6 +14,7 @@ router = APIRouter()
 async def ingest_linkedin_messages(
     user_id: uuid.UUID,
     file: UploadFile = File(...),
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Upload LinkedIn messages.csv for voice/tone analysis."""
@@ -32,6 +34,7 @@ async def ingest_linkedin_messages(
 async def ingest_linkedin_endorsements(
     user_id: uuid.UUID,
     file: UploadFile = File(...),
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Upload LinkedIn endorsements CSV for KnowledgeMap."""
@@ -51,6 +54,7 @@ async def ingest_linkedin_endorsements(
 async def ingest_linkedin_connections(
     user_id: uuid.UUID,
     file: UploadFile = File(...),
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Upload LinkedIn connections CSV for network graph."""
@@ -70,6 +74,7 @@ async def ingest_linkedin_connections(
 async def ingest_career(
     user_id: uuid.UUID,
     career_data: dict,
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Submit career history as structured JSON."""
@@ -89,6 +94,7 @@ async def ingest_career(
 async def ingest_writing(
     user_id: uuid.UUID,
     file: UploadFile = File(...),
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Upload writing samples."""
@@ -108,6 +114,7 @@ async def ingest_writing(
 async def ingest_declaration(
     user_id: uuid.UUID,
     text: str,
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Submit a voice declaration — free-form text to seed positions."""
@@ -124,7 +131,11 @@ async def ingest_declaration(
 
 
 @router.get("/status/{user_id}")
-async def ingest_status(user_id: uuid.UUID, db: Session = Depends(get_db)):
+async def ingest_status(
+    user_id: uuid.UUID,
+    claims: dict = Depends(get_authenticated_user),
+    db: Session = Depends(get_db),
+):
     """Check ingest pipeline status for a user."""
     sources = db.query(IngestSource).filter(IngestSource.user_id == user_id).all()
     return {

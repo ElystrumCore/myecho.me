@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from echo.api.auth_dep import get_authenticated_user
 from echo.database import get_db
 from echo.models.profile import EchoProfile
 from echo.models.user import User
@@ -58,7 +59,10 @@ async def get_knowledge(user_id: uuid.UUID, db: Session = Depends(get_db)):
 
 @router.put("/{user_id}/beliefs")
 async def update_beliefs(
-    user_id: uuid.UUID, beliefs: dict, db: Session = Depends(get_db)
+    user_id: uuid.UUID,
+    beliefs: dict,
+    claims: dict = Depends(get_authenticated_user),
+    db: Session = Depends(get_db),
 ):
     """Manually update/confirm belief positions."""
     profile = db.query(EchoProfile).filter(EchoProfile.user_id == user_id).first()
@@ -79,6 +83,7 @@ async def ingest_conversations(
     user_id: uuid.UUID,
     source_type: str,
     file: UploadFile = File(...),
+    claims: dict = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Upload a Claude or ChatGPT conversations.json and process it.
@@ -161,7 +166,11 @@ async def ingest_conversations(
 
 
 @router.post("/{user_id}/rebuild")
-async def rebuild_profile(user_id: uuid.UUID, db: Session = Depends(get_db)):
+async def rebuild_profile(
+    user_id: uuid.UUID,
+    claims: dict = Depends(get_authenticated_user),
+    db: Session = Depends(get_db),
+):
     """Trigger a full profile rebuild — recompile voice prompt from current data."""
     from echo.profile.compiler import compile_voice_prompt
 
