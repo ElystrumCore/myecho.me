@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from echo.api.auth_dep import get_authenticated_user
 from echo.database import get_db
 from echo.engine.voice import generate_text
 from echo.models.profile import EchoProfile
@@ -107,7 +108,11 @@ def _build_instruction(register: str, audience: str, atom_text: str) -> str:
 
 
 @router.post("/generate", response_model=VoiceGenerateResponse)
-def voice_generate(req: VoiceGenerateRequest, db: Session = Depends(get_db)) -> VoiceGenerateResponse:
+def voice_generate(
+    req: VoiceGenerateRequest,
+    claims: dict = Depends(get_authenticated_user),
+    db: Session = Depends(get_db),
+) -> VoiceGenerateResponse:
     """Generate text in CJ's voice for a given register/audience.
 
     Looks up the default Echo profile (single-tenant v1), builds a
@@ -157,7 +162,10 @@ def voice_generate(req: VoiceGenerateRequest, db: Session = Depends(get_db)) -> 
 
 
 @router.post("/feedback", status_code=204)
-def voice_feedback(payload: dict) -> None:
+def voice_feedback(
+    payload: dict,
+    claims: dict = Depends(get_authenticated_user),
+) -> None:
     """Record an edit pair for future training-signal use.
 
     For v1 this is a best-effort no-op so the myecho_client.record_edit()
