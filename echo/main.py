@@ -16,6 +16,7 @@ from echo.api.ingest import router as ingest_router
 from echo.api.journal import router as journal_router
 from echo.api.profile import router as profile_router
 from echo.api.theme import router as theme_router
+from echo.api.voice import router as voice_router
 from echo.config import settings
 from echo.database import get_db, SessionLocal
 
@@ -30,6 +31,19 @@ static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
+# React owner dashboard (BlockNote editor). Vite outputs to
+# echo/static/dashboard/ (see frontend/vite.config.ts → build.outDir).
+# Mounted with html=True so client-side routing works (SPA fallback to
+# index.html for unknown sub-paths). Guarded by dist presence so dev runs
+# without first running `pnpm build` in frontend/ stay fine.
+dashboard_dist = static_dir / "dashboard"
+if (dashboard_dist / "index.html").exists():
+    app.mount(
+        "/dashboard",
+        StaticFiles(directory=str(dashboard_dist), html=True),
+        name="dashboard",
+    )
+
 # API routes
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(ingest_router, prefix="/api/ingest", tags=["ingest"])
@@ -40,6 +54,9 @@ app.include_router(dashboard_router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(theme_router, prefix="/api/echo", tags=["theme"])
 app.include_router(comments_router, prefix="/api/journal", tags=["comments"])
 app.include_router(exchange_router, prefix="/exchange", tags=["exchange"])
+# PGE integration: voice generation endpoint at /voice/generate matching
+# myecho_client contract. See echo/api/voice.py for the contract.
+app.include_router(voice_router, prefix="/voice", tags=["voice-pge"])
 
 
 @app.get("/")
