@@ -166,3 +166,167 @@ async def test_non_string_email_claim_treated_as_missing():
         await dep(credentials=creds)
     # Should be 401 (token unusable: no valid email claim), not 500 (crash)
     assert exc.value.status_code == 401
+
+
+# ----------------------------------------------------------------------------
+# JWKS kid-miss refresh on Auth0 key rotation (follow-up #51)
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_jwks_refresh_on_kid_miss(monkeypatch):
+    """When the cached JWKS doesn't contain the kid, refresh once and retry.
+
+    Simulates Auth0 key rotation: cache has key A, token signed with key B.
+    The first httpx fetch returns {keys:[A]} (stale), the second returns
+    {keys:[A,B]} (post-rotation). _find_signing_key should hit the miss
+    path, pop the cache, refresh, and return B.
+    """
+    import echo.api.auth_dep as ad
+    importlib.reload(ad)
+    ad._JWKS_CACHE.clear()
+    ad._JWKS_REFRESH_COOLDOWN.clear()
+
+    domain = "test.auth0.com"
+    key_a = {"kid": "key-a", "kty": "RSA"}
+    key_b = {"kid": "key-b", "kty": "RSA"}
+
+    # Fake httpx so we count *network* calls, not cache reads. _fetch_jwks
+    # honors _JWKS_CACHE itself, so this is the real cache + real fetch flow.
+    fetch_calls = {"n": 0}
+
+    class _FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return self._payload
+
+    class _FakeClient:
+        def __init__(self, *a, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return None
+        async def get(self, url):
+            fetch_calls["n"] += 1
+            if fetch_calls["n"] == 1:
+                return _FakeResponse({"keys": [key_a]})
+            return _FakeResponse({"keys": [key_a, key_b]})
+
+    monkeypatch.setattr(ad.httpx, "AsyncClient", _FakeClient)
+
+    found = await ad._find_signing_key(domain, "key-b")
+    assert found == key_b
+    assert fetch_calls["n"] == 2  # 1 stale fetch + 1 refresh
+
+
+@pytest.mark.asyncio
+async def test_jwks_no_refresh_when_kid_already_present(monkeypatch):
+    """Cache hit should NOT trigger a refresh."""
+    import echo.api.auth_dep as ad
+    importlib.reload(ad)
+    ad._JWKS_CACHE.clear()
+    ad._JWKS_REFRESH_COOLDOWN.clear()
+
+    domain = "test.auth0.com"
+    key_a = {"kid": "key-a", "kty": "RSA"}
+    fetch_calls = {"n": 0}
+
+    class _FakeResponse:
+        def raise_for_status(self): return None
+        def json(self): return {"keys": [key_a]}
+
+    class _FakeClient:
+        def __init__(self, *a, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return None
+        async def get(self, url):
+            fetch_calls["n"] += 1
+            return _FakeResponse()
+
+    monkeypatch.setattr(ad.httpx, "AsyncClient", _FakeClient)
+
+    found = await ad._find_signing_key(domain, "key-a")
+    assert found == key_a
+    assert fetch_calls["n"] == 1  # first call only; cache served the lookup
+
+
+@pytest.mark.asyncio
+async def test_jwks_cooldown_blocks_repeat_refresh(monkeypatch):
+    """Within cooldown, a second kid-miss must NOT trigger another network fetch.
+
+    Protects the JWKS endpoint from being hammered by malformed-kid tokens.
+    """
+    import echo.api.auth_dep as ad
+    importlib.reload(ad)
+    ad._JWKS_CACHE.clear()
+    ad._JWKS_REFRESH_COOLDOWN.clear()
+
+    domain = "test.auth0.com"
+    key_a = {"kid": "key-a", "kty": "RSA"}
+    fetch_calls = {"n": 0}
+
+    class _FakeResponse:
+        def raise_for_status(self): return None
+        def json(self): return {"keys": [key_a]}
+
+    class _FakeClient:
+        def __init__(self, *a, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return None
+        async def get(self, url):
+            fetch_calls["n"] += 1
+            return _FakeResponse()
+
+    monkeypatch.setattr(ad.httpx, "AsyncClient", _FakeClient)
+
+    # First miss → 1 stale fetch + 1 refresh = 2 network calls.
+    first = await ad._find_signing_key(domain, "key-missing")
+    assert first is None
+    assert fetch_calls["n"] == 2
+
+    # Second miss within cooldown → cache serves the first read, cooldown
+    # blocks the refresh → still 2 network calls.
+    second = await ad._find_signing_key(domain, "key-also-missing")
+    assert second is None
+    assert fetch_calls["n"] == 2
+
+
+@pytest.mark.asyncio
+async def test_jwks_cooldown_expires_allows_refresh(monkeypatch):
+    """After cooldown elapses, a kid-miss should refresh again."""
+    import echo.api.auth_dep as ad
+    importlib.reload(ad)
+    ad._JWKS_CACHE.clear()
+    ad._JWKS_REFRESH_COOLDOWN.clear()
+
+    domain = "test.auth0.com"
+    key_a = {"kid": "key-a", "kty": "RSA"}
+    fetch_calls = {"n": 0}
+
+    class _FakeResponse:
+        def raise_for_status(self): return None
+        def json(self): return {"keys": [key_a]}
+
+    class _FakeClient:
+        def __init__(self, *a, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return None
+        async def get(self, url):
+            fetch_calls["n"] += 1
+            return _FakeResponse()
+
+    monkeypatch.setattr(ad.httpx, "AsyncClient", _FakeClient)
+
+    # Fake clock so we can jump past the cooldown.
+    fake_now = {"t": 1_000_000.0}
+    monkeypatch.setattr(ad.time, "time", lambda: fake_now["t"])
+
+    await ad._find_signing_key(domain, "missing")
+    assert fetch_calls["n"] == 2  # 1 stale + 1 refresh
+
+    # Jump time past cooldown window.
+    fake_now["t"] += ad._JWKS_COOLDOWN_SECONDS + 1
+    await ad._find_signing_key(domain, "missing-again")
+    # Cache serves the first read (0 network) + cooldown elapsed → 1 refresh.
+    assert fetch_calls["n"] == 3

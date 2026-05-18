@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Optional
 
 import httpx
@@ -33,6 +34,12 @@ _ALLOWED = {
 # Per-domain JWKS cache. Auth0 rotates signing keys rarely; refetching on
 # cache miss is fine. Process-local — restart clears it.
 _JWKS_CACHE: dict[str, dict] = {}
+
+# Cooldown so a flood of malformed-kid tokens can't DoS the JWKS endpoint.
+# When a kid is not in the cached JWKS we refresh once, then suppress further
+# refreshes for this domain until the cooldown elapses.
+_JWKS_REFRESH_COOLDOWN: dict[str, float] = {}
+_JWKS_COOLDOWN_SECONDS = 60
 
 
 def _verify_hs256(token: str) -> Optional[dict]:
@@ -64,6 +71,34 @@ async def _fetch_jwks(domain: str) -> dict:
     return jwks
 
 
+async def _find_signing_key(domain: str, kid: str) -> Optional[dict]:
+    """Find JWK matching kid. On miss, refresh JWKS once (cooldown-gated).
+
+    Auth0 rotates signing keys (annually by default). Without a refresh, all
+    requests signed with the new key 401 until the process restarts because
+    the cached JWKS has no matching kid. We refresh on miss, but only once
+    per _JWKS_COOLDOWN_SECONDS per domain so a flood of malformed-kid
+    tokens can't be turned into a JWKS-endpoint DoS.
+    """
+    jwks = await _fetch_jwks(domain)
+    for key in jwks.get("keys", []):
+        if key.get("kid") == kid:
+            return key
+
+    # Miss — possibly a key rotation. Refresh once if cooldown allows.
+    now = time.time()
+    last_refresh = _JWKS_REFRESH_COOLDOWN.get(domain, 0.0)
+    if now - last_refresh < _JWKS_COOLDOWN_SECONDS:
+        return None
+    _JWKS_REFRESH_COOLDOWN[domain] = now
+    _JWKS_CACHE.pop(domain, None)
+    jwks = await _fetch_jwks(domain)
+    for key in jwks.get("keys", []):
+        if key.get("kid") == kid:
+            return key
+    return None
+
+
 async def _verify_auth0(token: str) -> Optional[dict]:
     """Verify Auth0 RS256 token via JWKS. Returns claims or None."""
     if not _AUTH0_DOMAIN or not _AUTH0_AUDIENCE:
@@ -73,12 +108,7 @@ async def _verify_auth0(token: str) -> Optional[dict]:
         kid = header.get("kid")
         if not kid:
             return None
-        jwks = await _fetch_jwks(_AUTH0_DOMAIN)
-        signing_key = None
-        for key in jwks.get("keys", []):
-            if key.get("kid") == kid:
-                signing_key = key
-                break
+        signing_key = await _find_signing_key(_AUTH0_DOMAIN, kid)
         if not signing_key:
             return None
         return jwt.decode(
