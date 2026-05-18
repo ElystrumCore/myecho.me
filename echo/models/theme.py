@@ -5,11 +5,14 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echo.database import Base
+
+# JSONB on Postgres, JSON on sqlite (test runs).
+_JSON = JSONB().with_variant(JSON(), "sqlite")
 
 if TYPE_CHECKING:
     from echo.models.user import User
@@ -28,7 +31,7 @@ class ThemeConfig(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), unique=True)
     name: Mapped[str] = mapped_column(String(128), default="Default")
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+    config: Mapped[dict] = mapped_column(_JSON, default=dict)
     css_overrides: Mapped[str | None] = mapped_column(Text, nullable=True)
     generated_by: Mapped[ThemeGeneratedBy] = mapped_column(
         Enum(ThemeGeneratedBy), default=ThemeGeneratedBy.template

@@ -6,11 +6,14 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echo.database import Base
+
+# JSONB on Postgres, JSON on sqlite (test runs).
+_JSON = JSONB().with_variant(JSON(), "sqlite")
 
 if TYPE_CHECKING:
     from echo.models.user import User
@@ -65,7 +68,7 @@ class Letter(Base):
         ForeignKey("letters.id"), nullable=True
     )
     # Ghost metadata (JSONB — versioned, extensible per spec)
-    ghost_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ghost_metadata: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
     # Delivery state
     sender_mood: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -83,12 +86,12 @@ class GhostDraft(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     draft_body: Mapped[str] = mapped_column(Text)
     # GhostEnvelope as JSONB (versioned, extensible)
-    generated_envelope: Mapped[dict] = mapped_column(JSONB, default=dict)
+    generated_envelope: Mapped[dict] = mapped_column(_JSON, default=dict)
     status: Mapped[GhostDraftStatus] = mapped_column(
         Enum(GhostDraftStatus), default=GhostDraftStatus.pending
     )
     holder_decision_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    edit_diff: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    edit_diff: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     incoming_letter: Mapped[Letter] = relationship(foreign_keys=[incoming_letter_id])
@@ -105,7 +108,7 @@ class GhostSettings(Base):
     mode: Mapped[GhostMode] = mapped_column(Enum(GhostMode), default=GhostMode.off)
     # Per-correspondent overrides stored as JSONB
     # {"echo://2@myecho.me": "draft", "echo://5@myecho.me": "auto"}
-    correspondent_overrides: Mapped[dict] = mapped_column(JSONB, default=dict)
+    correspondent_overrides: Mapped[dict] = mapped_column(_JSON, default=dict)
     total_drafts_approved: Mapped[int] = mapped_column(Integer, default=0)
     send_as_written_count: Mapped[int] = mapped_column(Integer, default=0)
     auto_consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

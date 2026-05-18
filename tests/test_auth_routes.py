@@ -32,38 +32,25 @@ def _env(monkeypatch):
 def client():
     """TestClient against the full FastAPI app.
 
-    Overrides get_db with a stub session because the default sqlite engine
-    was created in the main thread but TestClient dispatches requests on a
-    worker thread — sqlite refuses cross-thread use. These tests only check
-    auth gating; downstream DB behaviour is tested elsewhere. The stub
-    returns no rows, so route handlers raise 404 cleanly (which is exactly
-    what the "public GET, not 401" assertion expects).
+    Uses the real sqlite in-memory engine. echo.database._make_engine
+    configures sqlite with check_same_thread=False + StaticPool so
+    TestClient's worker-thread dispatches share the same DB the fixture
+    creates tables on. These tests only check auth gating; route handlers
+    that pass auth then hit "not found" because the DB is empty — which
+    is exactly what the "not 401/403" assertions expect.
     """
-    from echo.database import get_db
+    # Importing echo.models.* ensures every Base subclass is registered
+    # before create_all. Without this, only models that happen to have
+    # been imported elsewhere get tables.
+    from echo import models  # noqa: F401
+    from echo.database import Base, engine
     from echo.main import app
 
-    class _StubQuery:
-        def filter(self, *a, **kw): return self
-        def first(self): return None
-        def all(self): return []
-        def order_by(self, *a, **kw): return self
-
-    class _StubSession:
-        def query(self, *a, **kw): return _StubQuery()
-        def add(self, *a, **kw): pass
-        def commit(self): pass
-        def refresh(self, *a, **kw): pass
-        def flush(self): pass
-        def close(self): pass
-
-    def _override_get_db():
-        yield _StubSession()
-
-    app.dependency_overrides[get_db] = _override_get_db
+    Base.metadata.create_all(bind=engine)
     try:
         yield TestClient(app)
     finally:
-        app.dependency_overrides.pop(get_db, None)
+        Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
