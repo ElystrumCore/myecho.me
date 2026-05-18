@@ -11,12 +11,18 @@ from __future__ import annotations
 import logging
 import os
 import time
+import uuid
 from typing import Optional
 
 import httpx
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+
+# get_db lives in echo.database; importing here is safe because database.py
+# only imports from echo.config (no cycle through api.* modules).
+from echo.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -157,4 +163,56 @@ async def get_authenticated_user(
         if email not in _ALLOWED:
             logger.info("Rejected token with email %s", email)
             raise HTTPException(status_code=403, detail="Email not in allowlist")
+    return claims
+
+
+# ---------------------------------------------------------------------------
+# Horizontal isolation — owner-only mutations against {user_id} routes
+# ---------------------------------------------------------------------------
+
+# Service principals that are trusted to act on any user_id. The PGE celery
+# worker calls /voice/* on behalf of users with a single shared token; it
+# doesn't have per-user identity, so it must bypass the ownership check.
+# Routes meant only for the data owner should NOT include service emails
+# here at the route layer — they get the bypass automatically.
+SERVICE_EMAILS = {"pge-svc@hyperschool.internal"}
+
+
+def get_authenticated_user_with_ownership(
+    user_id: uuid.UUID,
+    claims: dict = Depends(get_authenticated_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Like get_authenticated_user, but also verifies the token's email
+    matches the owner of the {user_id} path parameter.
+
+    Use this on routes where {user_id} is part of the URL AND the action
+    mutates that user's data. Service tokens (SERVICE_EMAILS) skip the
+    ownership check — they're trusted to act on any user_id.
+
+    For v1 single-tenant this is defensive: ECHO_DEFAULT_USER_ID + a
+    single allowlisted owner email means the check is always trivially
+    satisfied. The point is that adding a second allowlisted user MUST
+    NOT make them able to mutate the first user's profile/atoms/drafts.
+    """
+    # User import is lazy — auth_dep is imported very early in app startup
+    # and we don't want to drag the full models tree into that boot path
+    # before SQLAlchemy is fully configured by other modules.
+    from echo.models.user import User
+
+    email = _extract_email(claims)
+    if not email:
+        raise HTTPException(
+            status_code=401, detail="Token missing email claim"
+        )
+    if email in SERVICE_EMAILS:
+        return claims  # service principals bypass ownership
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if (user.email or "").lower() != email:
+        raise HTTPException(
+            status_code=403, detail="Not authorized for this user"
+        )
     return claims

@@ -1,10 +1,17 @@
 """Tests for echo/api/auth_dep.py — auth dependency."""
 import importlib
+import os
+import uuid
+
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from jose import jwt
 from unittest.mock import patch, AsyncMock
+
+# echo.database imports settings at module load; provide a URL before any
+# echo.* import that walks through database.py.
+os.environ.setdefault("ECHO_DATABASE_URL", "sqlite:///:memory:")
 
 
 @pytest.fixture(autouse=True)
@@ -330,3 +337,99 @@ async def test_jwks_cooldown_expires_allows_refresh(monkeypatch):
     await ad._find_signing_key(domain, "missing-again")
     # Cache serves the first read (0 network) + cooldown elapsed → 1 refresh.
     assert fetch_calls["n"] == 3
+
+
+# ----------------------------------------------------------------------------
+# Horizontal isolation — get_authenticated_user_with_ownership (follow-up #53)
+# ----------------------------------------------------------------------------
+
+
+@pytest.fixture
+def _ownership_db():
+    """Real sqlite in-memory DB with users table populated for ownership tests."""
+    from echo import models  # noqa: F401 — register all Base subclasses
+    from echo.database import Base, SessionLocal, engine
+    from echo.models.user import User
+
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    owner = User(
+        id=uuid.uuid4(),
+        username="owner",
+        display_name="Owner",
+        email="good@example.com",
+    )
+    other = User(
+        id=uuid.uuid4(),
+        username="other",
+        display_name="Other",
+        email="other@example.com",
+    )
+    db.add_all([owner, other])
+    db.commit()
+    db.refresh(owner)
+    db.refresh(other)
+    try:
+        yield {"db": db, "owner": owner, "other": other}
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_ownership_owner_email_matches_passes(_ownership_db):
+    from echo.api.auth_dep import get_authenticated_user_with_ownership as dep
+    owner = _ownership_db["owner"]
+    claims = {"email": "good@example.com", "sub": "x"}
+    result = dep(user_id=owner.id, claims=claims, db=_ownership_db["db"])
+    assert result["email"] == "good@example.com"
+
+
+def test_ownership_service_email_bypasses_check(_ownership_db):
+    """Service principals can act on any user_id."""
+    from echo.api.auth_dep import get_authenticated_user_with_ownership as dep
+    other = _ownership_db["other"]
+    claims = {"email": "pge-svc@hyperschool.internal", "sub": "svc"}
+    # Service email + someone else's user_id → still passes (no 403)
+    result = dep(user_id=other.id, claims=claims, db=_ownership_db["db"])
+    assert result["email"] == "pge-svc@hyperschool.internal"
+
+
+def test_ownership_wrong_owner_email_returns_403(_ownership_db):
+    """Allowlisted email A trying to act on user B's user_id → 403."""
+    from echo.api.auth_dep import get_authenticated_user_with_ownership as dep
+    other = _ownership_db["other"]
+    claims = {"email": "good@example.com", "sub": "x"}  # token for owner
+    with pytest.raises(HTTPException) as exc:
+        # …but path user_id is for other user.
+        dep(user_id=other.id, claims=claims, db=_ownership_db["db"])
+    assert exc.value.status_code == 403
+
+
+def test_ownership_unknown_user_id_returns_404(_ownership_db):
+    """Path user_id that doesn't exist → 404."""
+    from echo.api.auth_dep import get_authenticated_user_with_ownership as dep
+    claims = {"email": "good@example.com", "sub": "x"}
+    with pytest.raises(HTTPException) as exc:
+        dep(user_id=uuid.uuid4(), claims=claims, db=_ownership_db["db"])
+    assert exc.value.status_code == 404
+
+
+def test_ownership_missing_email_claim_returns_401(_ownership_db):
+    """Token (somehow) without an email claim → 401, never 403."""
+    from echo.api.auth_dep import get_authenticated_user_with_ownership as dep
+    owner = _ownership_db["owner"]
+    claims = {"sub": "x"}  # no email
+    with pytest.raises(HTTPException) as exc:
+        dep(user_id=owner.id, claims=claims, db=_ownership_db["db"])
+    assert exc.value.status_code == 401
+
+
+def test_ownership_email_comparison_is_case_insensitive(_ownership_db):
+    """Owner email is stored lowercase; token email arrives in mixed case."""
+    from echo.api.auth_dep import get_authenticated_user_with_ownership as dep
+    owner = _ownership_db["owner"]
+    # _extract_email lowercases before comparison, but the test pins the
+    # documented behaviour: identity is "same email, any casing".
+    claims = {"email": "GOOD@Example.COM", "sub": "x"}
+    result = dep(user_id=owner.id, claims=claims, db=_ownership_db["db"])
+    assert result["sub"] == "x"
