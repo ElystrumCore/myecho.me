@@ -84,10 +84,16 @@ async def journal_page(username: str, request: Request):
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            return templates.TemplateResponse("journal.html", {
-                "request": request, "username": username,
-                "display_name": username, "entries": [], "stats": {},
-            })
+            return templates.TemplateResponse(
+                request,
+                "journal.html",
+                {
+                    "username": username,
+                    "display_name": username,
+                    "entries": [],
+                    "stats": {},
+                },
+            )
 
         entries = (
             db.query(JournalEntry)
@@ -116,13 +122,16 @@ async def journal_page(username: str, request: Request):
             stats["total_messages"] = f"{fp.get('structure', {}).get('total_messages', 0):,}"
             stats["sources"] = len(fp.get("sources", {}))
 
-        return templates.TemplateResponse("journal.html", {
-            "request": request,
-            "username": username,
-            "display_name": user.display_name,
-            "entries": entry_data,
-            "stats": stats,
-        })
+        return templates.TemplateResponse(
+            request,
+            "journal.html",
+            {
+                "username": username,
+                "display_name": user.display_name,
+                "entries": entry_data,
+                "stats": stats,
+            },
+        )
     finally:
         db.close()
 
@@ -146,12 +155,15 @@ async def ask_page(username: str, request: Request):
                 stats["total_messages"] = f"{fp.get('structure', {}).get('total_messages', 0):,}"
                 stats["sources"] = len(fp.get("sources", {}))
 
-        return templates.TemplateResponse("ask.html", {
-            "request": request,
-            "username": username,
-            "display_name": display_name,
-            "stats": stats,
-        })
+        return templates.TemplateResponse(
+            request,
+            "ask.html",
+            {
+                "username": username,
+                "display_name": display_name,
+                "stats": stats,
+            },
+        )
     finally:
         db.close()
 
