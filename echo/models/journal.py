@@ -5,11 +5,15 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echo.database import Base
+
+# Postgres ARRAY(String) has no native sqlite analog; serialize as JSON list
+# in sqlite (test runs only — prod stays on Postgres array semantics).
+_STRING_ARRAY = ARRAY(String).with_variant(JSON(), "sqlite")
 
 if TYPE_CHECKING:
     from echo.models.user import User
@@ -180,7 +184,7 @@ class AskInteraction(Base):
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ask_interactions.id"), nullable=True
     )
-    belief_refs: Mapped[list] = mapped_column(ARRAY(String), default=list)
+    belief_refs: Mapped[list] = mapped_column(_STRING_ARRAY, default=list)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

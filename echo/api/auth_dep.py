@@ -10,12 +10,19 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+import uuid
 from typing import Optional
 
 import httpx
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+
+# get_db lives in echo.database; importing here is safe because database.py
+# only imports from echo.config (no cycle through api.* modules).
+from echo.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +40,12 @@ _ALLOWED = {
 # Per-domain JWKS cache. Auth0 rotates signing keys rarely; refetching on
 # cache miss is fine. Process-local — restart clears it.
 _JWKS_CACHE: dict[str, dict] = {}
+
+# Cooldown so a flood of malformed-kid tokens can't DoS the JWKS endpoint.
+# When a kid is not in the cached JWKS we refresh once, then suppress further
+# refreshes for this domain until the cooldown elapses.
+_JWKS_REFRESH_COOLDOWN: dict[str, float] = {}
+_JWKS_COOLDOWN_SECONDS = 60
 
 
 def _verify_hs256(token: str) -> Optional[dict]:
@@ -64,6 +77,34 @@ async def _fetch_jwks(domain: str) -> dict:
     return jwks
 
 
+async def _find_signing_key(domain: str, kid: str) -> Optional[dict]:
+    """Find JWK matching kid. On miss, refresh JWKS once (cooldown-gated).
+
+    Auth0 rotates signing keys (annually by default). Without a refresh, all
+    requests signed with the new key 401 until the process restarts because
+    the cached JWKS has no matching kid. We refresh on miss, but only once
+    per _JWKS_COOLDOWN_SECONDS per domain so a flood of malformed-kid
+    tokens can't be turned into a JWKS-endpoint DoS.
+    """
+    jwks = await _fetch_jwks(domain)
+    for key in jwks.get("keys", []):
+        if key.get("kid") == kid:
+            return key
+
+    # Miss — possibly a key rotation. Refresh once if cooldown allows.
+    now = time.time()
+    last_refresh = _JWKS_REFRESH_COOLDOWN.get(domain, 0.0)
+    if now - last_refresh < _JWKS_COOLDOWN_SECONDS:
+        return None
+    _JWKS_REFRESH_COOLDOWN[domain] = now
+    _JWKS_CACHE.pop(domain, None)
+    jwks = await _fetch_jwks(domain)
+    for key in jwks.get("keys", []):
+        if key.get("kid") == kid:
+            return key
+    return None
+
+
 async def _verify_auth0(token: str) -> Optional[dict]:
     """Verify Auth0 RS256 token via JWKS. Returns claims or None."""
     if not _AUTH0_DOMAIN or not _AUTH0_AUDIENCE:
@@ -73,12 +114,7 @@ async def _verify_auth0(token: str) -> Optional[dict]:
         kid = header.get("kid")
         if not kid:
             return None
-        jwks = await _fetch_jwks(_AUTH0_DOMAIN)
-        signing_key = None
-        for key in jwks.get("keys", []):
-            if key.get("kid") == kid:
-                signing_key = key
-                break
+        signing_key = await _find_signing_key(_AUTH0_DOMAIN, kid)
         if not signing_key:
             return None
         return jwt.decode(
@@ -127,4 +163,56 @@ async def get_authenticated_user(
         if email not in _ALLOWED:
             logger.info("Rejected token with email %s", email)
             raise HTTPException(status_code=403, detail="Email not in allowlist")
+    return claims
+
+
+# ---------------------------------------------------------------------------
+# Horizontal isolation — owner-only mutations against {user_id} routes
+# ---------------------------------------------------------------------------
+
+# Service principals that are trusted to act on any user_id. The PGE celery
+# worker calls /voice/* on behalf of users with a single shared token; it
+# doesn't have per-user identity, so it must bypass the ownership check.
+# Routes meant only for the data owner should NOT include service emails
+# here at the route layer — they get the bypass automatically.
+SERVICE_EMAILS = {"pge-svc@hyperschool.internal"}
+
+
+def get_authenticated_user_with_ownership(
+    user_id: uuid.UUID,
+    claims: dict = Depends(get_authenticated_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Like get_authenticated_user, but also verifies the token's email
+    matches the owner of the {user_id} path parameter.
+
+    Use this on routes where {user_id} is part of the URL AND the action
+    mutates that user's data. Service tokens (SERVICE_EMAILS) skip the
+    ownership check — they're trusted to act on any user_id.
+
+    For v1 single-tenant this is defensive: ECHO_DEFAULT_USER_ID + a
+    single allowlisted owner email means the check is always trivially
+    satisfied. The point is that adding a second allowlisted user MUST
+    NOT make them able to mutate the first user's profile/atoms/drafts.
+    """
+    # User import is lazy — auth_dep is imported very early in app startup
+    # and we don't want to drag the full models tree into that boot path
+    # before SQLAlchemy is fully configured by other modules.
+    from echo.models.user import User
+
+    email = _extract_email(claims)
+    if not email:
+        raise HTTPException(
+            status_code=401, detail="Token missing email claim"
+        )
+    if email in SERVICE_EMAILS:
+        return claims  # service principals bypass ownership
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if (user.email or "").lower() != email:
+        raise HTTPException(
+            status_code=403, detail="Not authorized for this user"
+        )
     return claims

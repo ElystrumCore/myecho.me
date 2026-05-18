@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from echo.api.auth_dep import get_authenticated_user
+from echo.api.auth_dep import get_authenticated_user_with_ownership
 from echo.database import get_db
 from echo.models.journal import AskInteraction, DriftEvent, EntryStatus, JournalEntry
 
@@ -13,7 +13,7 @@ router = APIRouter()
 @router.get("/{user_id}/overview")
 async def dashboard_overview(
     user_id: uuid.UUID,
-    claims: dict = Depends(get_authenticated_user),
+    claims: dict = Depends(get_authenticated_user_with_ownership),
     db: Session = Depends(get_db),
 ):
     """Stats, pending items, drift alerts."""
@@ -53,7 +53,7 @@ async def dashboard_overview(
 @router.get("/{user_id}/drift")
 async def list_drift(
     user_id: uuid.UUID,
-    claims: dict = Depends(get_authenticated_user),
+    claims: dict = Depends(get_authenticated_user_with_ownership),
     db: Session = Depends(get_db),
 ):
     """Drift events for a user."""
@@ -81,7 +81,7 @@ async def list_drift(
 async def acknowledge_drift(
     user_id: uuid.UUID,
     event_id: uuid.UUID,
-    claims: dict = Depends(get_authenticated_user),
+    claims: dict = Depends(get_authenticated_user_with_ownership),
     db: Session = Depends(get_db),
 ):
     """Acknowledge a drift event."""
