@@ -1,24 +1,22 @@
-import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
 
 from echo.api.auth import router as auth_router
 from echo.api.comments import router as comments_router
-from echo.api.exchange import router as exchange_router
 from echo.api.dashboard import router as dashboard_router
 from echo.api.echo import router as echo_router
+from echo.api.exchange import router as exchange_router
 from echo.api.ingest import router as ingest_router
 from echo.api.journal import router as journal_router
 from echo.api.profile import router as profile_router
 from echo.api.theme import router as theme_router
 from echo.api.voice import router as voice_router
 from echo.config import settings
-from echo.database import get_db, SessionLocal
+from echo.database import SessionLocal
 
 app = FastAPI(
     title=settings.app_name,
@@ -75,10 +73,20 @@ async def health():
 
 @app.get("/echo/{username}", response_class=HTMLResponse)
 async def journal_page(username: str, request: Request):
-    """Public journal stream for a user."""
-    from echo.models.user import User
-    from echo.models.journal import JournalEntry, JournalContent, EntryStatus
+    """Public journal stream for a user.
+
+    Cached for 5 min in Redis (key=echo:journal:{username}) to avoid the
+    4-query PG fanout on every page hit. Invalidate via `cache.invalidate_journal`
+    on entry publish / profile rebuild.
+    """
+    from echo import cache as echo_cache
+    from echo.models.journal import EntryStatus, JournalContent, JournalEntry
     from echo.models.profile import EchoProfile
+    from echo.models.user import User
+
+    cached = echo_cache.journal_data(username)
+    if cached is not None:
+        return templates.TemplateResponse(request, "journal.html", cached)
 
     db = SessionLocal()
     try:
@@ -122,16 +130,15 @@ async def journal_page(username: str, request: Request):
             stats["total_messages"] = f"{fp.get('structure', {}).get('total_messages', 0):,}"
             stats["sources"] = len(fp.get("sources", {}))
 
-        return templates.TemplateResponse(
-            request,
-            "journal.html",
-            {
-                "username": username,
-                "display_name": user.display_name,
-                "entries": entry_data,
-                "stats": stats,
-            },
-        )
+        ctx = {
+            "username": username,
+            "display_name": user.display_name,
+            "entries": entry_data,
+            "stats": stats,
+        }
+        # Cache without the request object (Request is not JSON-serializable).
+        echo_cache.set_journal_data(username, ctx)
+        return templates.TemplateResponse(request, "journal.html", ctx)
     finally:
         db.close()
 
@@ -139,8 +146,8 @@ async def journal_page(username: str, request: Request):
 @app.get("/echo/{username}/ask", response_class=HTMLResponse)
 async def ask_page(username: str, request: Request):
     """Public Ask page."""
-    from echo.models.user import User
     from echo.models.profile import EchoProfile
+    from echo.models.user import User
 
     db = SessionLocal()
     try:
@@ -170,13 +177,23 @@ async def ask_page(username: str, request: Request):
 
 @app.post("/api/journal/{username}/ask")
 async def public_ask(username: str, request: Request):
-    """Public Ask endpoint — called by the ask.html form."""
-    from echo.models.user import User
-    from echo.models.profile import EchoProfile
+    """Public Ask endpoint — called by the ask.html form.
+
+    Identical questions are cached for 1h (keyed by sha256(question)) to bound
+    Claude API spend when a question goes viral or visitors retry the form.
+    """
+    from echo import cache as echo_cache
     from echo.engine.ask import respond
+    from echo.models.profile import EchoProfile
+    from echo.models.user import User
 
     body = await request.json()
     question = body.get("question", "")
+
+    # Cache hit before any DB / Claude work.
+    cached = echo_cache.ask_response(username, question)
+    if cached is not None:
+        return cached
 
     db = SessionLocal()
     try:
@@ -193,6 +210,10 @@ async def public_ask(username: str, request: Request):
             question,
             belief_graph=profile.belief_graph,
         )
+        # Only cache successful responses with a real confidence signal so
+        # transient errors don't poison the cache.
+        if isinstance(result, dict) and result.get("confidence", 0) > 0:
+            echo_cache.set_ask_response(username, question, result)
         return result
     finally:
         db.close()
